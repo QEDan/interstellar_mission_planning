@@ -1,0 +1,5 @@
+[flake8]
+exclude = vpython,notebooks
+max_line_length = 99
+ignore =
+per-file-ignores =
