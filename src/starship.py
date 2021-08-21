@@ -75,7 +75,7 @@ class Starship:
         """
         if fuel_mass is not None:
             delta_v = self.engines[engine_name].burn_fuel(fuel_mass, self.total_mass())
-            delta_t = np.abs(delta_v) / g
+            delta_t = np.abs(delta_v) / acceleration
             self.time += delta_t
             if decelerate:
                 delta_pos = self.velocity * delta_t - 0.5 * acceleration * delta_t ** 2
@@ -83,14 +83,14 @@ class Starship:
             else:
                 delta_pos = self.velocity * delta_t + 0.5 * acceleration * delta_t ** 2
                 self.velocity += delta_v
-            self.time += np.abs(delta_v) / g
+            self.time += np.abs(delta_v) / acceleration
             self.position += delta_pos
 
         else:
             self.engines[engine_name].set_target_delta_v(
                 self.velocity - target_velocity, self.total_mass())
             delta_v = target_velocity - self.velocity
-            delta_t = np.abs(delta_v) / g
+            delta_t = np.abs(delta_v) / acceleration
             if decelerate:
                 delta_pos = self.velocity * delta_t - 0.5 * acceleration * delta_t ** 2
             else:
