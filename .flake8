@@ -1,5 +1,5 @@
 [flake8]
-exclude = vpython,notebooks
+exclude = vpython,notebooks,tests
 max_line_length = 99
-ignore =
+ignore = W503,W504
 per-file-ignores =
