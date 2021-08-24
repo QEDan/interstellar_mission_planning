@@ -101,7 +101,7 @@ class Starship:
 
         if abs(self.velocity / c) > 0.5:
             raise NotImplementedError(
-                "This ship is travelling at reletivistic speeds. This is not currently supported.")
+                "This ship is travelling at relativistic speeds. This is not currently supported.")
 
         self.log_entry(
             f"year {(self.time - delta_t) / yr:0.1f} - "

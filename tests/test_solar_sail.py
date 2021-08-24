@@ -1,5 +1,3 @@
-import numpy as np
-from scimath.units.length import kilometers as km, astronomical_unit
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
