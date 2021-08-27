@@ -1,7 +1,7 @@
 """Starship class"""
 import matplotlib.pyplot as plt
 import numpy as np
-from scimath.units.length import kilometers as km
+from scimath.units.length import kilometers as km, astronomical_unit
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
@@ -20,7 +20,8 @@ class Starship:
                  initial_velocity=0 * m / s,
                  initial_position=0 * km,
                  initial_time=0 * s,
-                 destination_distance=4.244 * ly
+                 destination_distance=4.244 * ly,
+                 solar_sail=None
                  ):
         self.payload_mass = payload_mass
         self.engines = engines
@@ -28,6 +29,7 @@ class Starship:
         self.position = initial_position
         self.time = initial_time
         self.destination_distance = destination_distance
+        self.solar_sail = solar_sail
         self.history = list()
         self.log_messages = list()
         self.log_entry()
@@ -133,6 +135,45 @@ class Starship:
         self.log_entry(
             f"year {(self.time - time) / yr:0.1f} - Waited: {time / yr:0.2e} years. "
             f"Distance={distance / ly:0.2e} lightyears")
+
+    def sail(self,
+             target_velocity,
+             time_step=60.0 * s,
+             initial_distance_to_star=astronomical_unit,
+             max_accel=None,
+             log_freq=10000):
+        if self.solar_sail is None:
+            raise RuntimeError("This starship has no solar sail. Cannot sail.")
+        max_velocity = self.solar_sail.final_velocity(
+                self.total_mass(),
+                initial_distance_to_star)
+        if target_velocity is None:
+            target_velocity = 0.99 * max_velocity
+        if target_velocity / c > max_velocity / c:
+            raise ValueError(f"Unable to achieve velocity {target_velocity / c}c "
+                             f"through sailing. Maximum achievable velocity"
+                             f" is {max_velocity / c}c.")
+        distance_to_star = initial_distance_to_star
+        iteration = 0
+        while self.velocity / c < target_velocity / c:
+            self.time += time_step
+            acceleration = self.solar_sail.acceleration(distance_to_star,
+                                                        self.total_mass(),
+                                                        max_accel=max_accel)
+            self.position += self.velocity * time_step
+            self.velocity += acceleration * time_step
+            distance_to_star += self.velocity * time_step
+            if iteration % log_freq == 0:
+                self.log_entry(
+                    f"year {(self.time) / yr:0.1f} - Sailing with velocity "
+                    f"{self.velocity / (m / s)} m/s."
+                )
+            iteration += 1
+            if iteration > 1.0e6:
+                print("Warning: too many iterations used for solar sailing. "
+                      "Consider increasing time_step size.")
+                break
+
 
     def print_history(self):
         """Print mission logs and messages"""
