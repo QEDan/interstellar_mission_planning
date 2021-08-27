@@ -110,4 +110,3 @@ dependencies:
     - widgetsnbextension==3.5.1
     - wrapt==1.12.1
     - yarl==1.6.3
-prefix: /home/mazur/linstore/Software/anaconda3/envs/interstellar
