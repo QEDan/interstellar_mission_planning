@@ -22,10 +22,11 @@ class Engine:
     def burn_fuel(self, burnt_fuel_mass, starship_mass):
         """Return the change in velocity after burning
         burnt_fuel_mass for payload starship_mass."""
+        total_mass = starship_mass + self.fuel_mass
         if burnt_fuel_mass / kg > self.fuel_mass / kg:
             raise ValueError(f"Not enough fuel for this maneuver. "
                              f"Requested {burnt_fuel_mass} of {self.fuel_mass}.")
-        delta_v = self.exhaust_velocity * np.log(starship_mass / (starship_mass - burnt_fuel_mass))
+        delta_v = self.exhaust_velocity * np.log(total_mass / (total_mass - burnt_fuel_mass))
         self.fuel_mass -= burnt_fuel_mass
         return delta_v
 
