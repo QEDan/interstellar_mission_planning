@@ -17,7 +17,7 @@ jobs:
         conda update conda
         conda update anaconda
         conda update --all
-        conda env create --file=environment.yml
+        CONDA_RESTORE_FREE_CHANNEL=1 conda env create --file=environment.yml
         conda init bash
     - name: Run tests
       run: |
