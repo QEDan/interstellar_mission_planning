@@ -17,9 +17,11 @@ jobs:
       run: |
         PYLINT_VER=$(grep pylint environment.yml | cut -d = -f2)
         pip install pylint==2.9.6
+        export PYTHONPATH=${pwd}
         pylint **/*.py
     - name: Lint with flake8
       run: |
         FLAKE8_VER=$(grep flake8 environment.yml | cut -d = -f2)
         pip install flake8==${FLAKE8_VER}
+        export PYTHONPATH=${pwd}
         flake8 --count --statistics
