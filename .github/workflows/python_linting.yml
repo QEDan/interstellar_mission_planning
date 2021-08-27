@@ -1,0 +1,25 @@
+name: Python linting
+
+on: [push]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: Set up Python 3.7
+      uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+    - name: Lint with pylint
+      run: |
+        PYLINT_VER=$(grep pylint environment.yml | cut -d = -f2)
+        pip install pylint==2.9.6
+        pylint **/*.py
+    - name: Lint with flake8
+      run: |
+        FLAKE8_VER=$(grep flake8 environment.yml | cut -d = -f2)
+        pip install flake8==${FLAKE8_VER}
+        flake8 --count --statistics
