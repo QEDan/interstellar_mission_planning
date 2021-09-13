@@ -5,6 +5,7 @@ from scimath.units.length import astronomical_unit
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
+from src.constants import g
 
 
 class SolarSail:
@@ -67,7 +68,7 @@ class SolarSail:
         accel = (1 + self.reflectivity) * 6.3e17 * (self.sail_radius / m) ** 2 \
             / (2 * (total_mass / kg) * (distance_from_star / m) ** 2) * (m / s ** 2)
         if max_accel:
-            accel = max(accel, max_accel)
+            accel = min(accel / g, max_accel / g) * g
         return accel
 
     def final_velocity(self, payload_mass, initial_distance_from_star):

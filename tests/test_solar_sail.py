@@ -29,6 +29,14 @@ class TestSolarSail:
         assert isinstance(accel / (m / s ** 2), float)
         assert abs(accel - 500 * g) / (500 * g) < 1.0e-3
 
+    def test_max_acceleration(self):
+        max_accel = 0.01 * g
+        accel = self.sail.acceleration(2 * solar_radius,
+                                       self.payload_mass,
+                                       max_accel=max_accel)
+        assert isinstance(accel / (m / s ** 2), float)
+        assert abs(accel - max_accel) / (max_accel) < 1.0e-3
+
     def test_final_velocity(self):
         final_velocity = self.sail.final_velocity(self.payload_mass, 2 * solar_radius)
         assert isinstance(final_velocity / (m / s), float)

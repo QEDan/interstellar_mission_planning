@@ -13,7 +13,7 @@ from src.constants import g, c
 class TestStarship:
     """Tests for the Starship class"""
     def setup_method(self):
-        self.fuel_mass = 1.0e20 * kg
+        self.fuel_mass = 1.0e10 * kg
         self.engine = Engine(self.fuel_mass)
         self.payload_mass = 50.0 * kg
         self.starship = Starship(self.payload_mass, {'main': self.engine})
@@ -54,7 +54,7 @@ class TestStarship:
         assert self.starship.time / s > 0
         assert self.starship.position / m > 0
 
-    @pytest.mark.parametrize('target_velocity', [0.001 * c, 0.01 * c, 0.1 * c, 0.4 * c])
+    @pytest.mark.parametrize('target_velocity', [0.001 * c, 0.01 * c, 0.02 * c])
     def test_accelerate_velocity(self, target_velocity):
         """Test accelerate using specific target velocities"""
         velocity = self.starship.accelerate(target_velocity=target_velocity)
@@ -77,10 +77,11 @@ class TestStarship:
         assert self.starship.time / s > 0
         assert self.starship.position / m > 0
 
-    @pytest.mark.parametrize('target_velocity', [0.001 * c, 0.01 * c, 0.1 * c, 0.4 * c])
+    @pytest.mark.parametrize('target_velocity', [0.001 * c, 0.01 * c, 0.02 * c])
     def test_decelerate_velocity(self, target_velocity):
         """Test decelerate using specific target velocities"""
-        initial_velocity = 0.49 * c
+        self.starship.engines['main'].fuel_mass = self.fuel_mass
+        initial_velocity = 0.03 * c
         self.starship.velocity = initial_velocity
         velocity = self.starship.accelerate(target_velocity=target_velocity, decelerate=True)
         assert isinstance(velocity / (m / s), float)
@@ -135,3 +136,40 @@ class TestStarship:
         fig = self.starship.plot_history()
         assert isinstance(fig, plt.Figure)
         plt.close()
+
+    def test_sail(self):
+        sail_area_density = 0.00003 * kg / m ** 2  # Carbon nanotube sheets
+        sail_radius = 6000 * km
+        sail_mass = sail_radius ** 2 * np.pi * sail_area_density
+        solar_sail = SolarSail(sail_mass, sail_radius, reflectivity=0.98)
+        initial_distance = 0.02 * astronomical_unit
+        self.starship.solar_sail = solar_sail
+        self.starship.sail(None, 
+                           time_step=600 * s,
+                           max_iterations=10000,
+                           initial_distance_to_star=initial_distance)
+        expected_velocity = self.starship.solar_sail.final_velocity(
+            self.starship.total_mass() - solar_sail.sail_mass,
+            initial_distance,
+        )
+        assert abs(self.starship.velocity / c - expected_velocity / c) / (expected_velocity / c) < 0.1
+        assert self.starship.position / astronomical_unit > 1.0e-2
+        
+    def test_sail_decelerate(self):
+        sail_area_density = 0.00003 * kg / m ** 2  # Carbon nanotube sheets
+        sail_radius = 6000 * km
+        sail_mass = sail_radius ** 2 * np.pi * sail_area_density
+        solar_sail = SolarSail(sail_mass, sail_radius, reflectivity=0.98)
+        initial_distance = astronomical_unit
+        self.starship.solar_sail = solar_sail
+        initial_velocity = self.starship.solar_sail.final_velocity(
+            self.starship.total_mass() - solar_sail.sail_mass,
+            initial_distance,
+        )
+        self.starship.velocity = initial_velocity
+        self.starship.sail(None, 
+                           time_step=600 * s,
+                           max_iterations=10000,
+                           initial_distance_to_star=initial_distance,
+                           decelerate=True)
+        assert self.starship.velocity / initial_velocity < 1.0e-3

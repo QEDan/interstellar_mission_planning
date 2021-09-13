@@ -13,7 +13,6 @@ from src.constants import c, g
 
 class Starship:
     """A Starship that uses engines to accelerate."""
-
     def __init__(self,
                  payload_mass,
                  engines: dict,
@@ -45,7 +44,10 @@ class Starship:
 
     def total_mass(self):
         """Return the payload plus fuel masses"""
-        return self.payload_mass + self.fuel_mass()
+        total_mass = self.payload_mass + self.fuel_mass()
+        if self.solar_sail is not None:
+            total_mass += self.solar_sail.sail_mass
+        return total_mass
 
     def fuel_mass(self):
         """Return the current fuel mass"""
@@ -107,7 +109,7 @@ class Starship:
 
         self.log_entry(
             f"year {(self.time - delta_t) / yr:0.1f} - "
-            f"Acceleration: {acceleration / g:0.1f} g for {delta_t / yr:0.2e} years. "
+            f"Acceleration: {acceleration / g:0.4f} g for {delta_t / yr:0.2e} years. "
             f" New velocity is {self.velocity / c:0.2e} c. "
             f" {self.fuel_mass() / kg:0.2e} kg of fuel remaining."
         )
@@ -141,39 +143,65 @@ class Starship:
              time_step=60.0 * s,
              initial_distance_to_star=astronomical_unit,
              max_accel=None,
-             log_freq=10000):
+             log_freq=10000,
+             max_iterations=1e6,
+             decelerate=False):
+        """Accelerate or decelerate using solar sails."""
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
         max_velocity = self.solar_sail.final_velocity(
-                self.total_mass(),
-                initial_distance_to_star)
+            self.total_mass() - self.solar_sail.sail_mass,
+            initial_distance_to_star)
         if target_velocity is None:
-            target_velocity = 0.99 * max_velocity
-        if target_velocity / c > max_velocity / c:
+            if decelerate:
+                target_velocity = 1.0e-22 * max_velocity
+            else:
+                target_velocity = 0.99 * max_velocity
+        if target_velocity / c > max_velocity / c and not decelerate:
             raise ValueError(f"Unable to achieve velocity {target_velocity / c}c "
                              f"through sailing. Maximum achievable velocity"
                              f" is {max_velocity / c}c.")
         distance_to_star = initial_distance_to_star
         iteration = 0
-        while self.velocity / c < target_velocity / c:
+
+        def velocity_condition():
+            if decelerate:
+                condition = self.velocity / c > target_velocity / c
+            else:
+                condition = self.velocity / c < target_velocity / c
+            return condition
+        while velocity_condition():
             self.time += time_step
             acceleration = self.solar_sail.acceleration(distance_to_star,
                                                         self.total_mass(),
                                                         max_accel=max_accel)
-            self.position += self.velocity * time_step
-            self.velocity += acceleration * time_step
-            distance_to_star += self.velocity * time_step
+            delta_position = self.velocity * time_step
+            self.position += delta_position
+            if decelerate:
+                self.velocity -= acceleration * time_step
+                distance_to_star -= delta_position
+            else:
+                self.velocity += acceleration * time_step
+                distance_to_star += delta_position
+
             if iteration % log_freq == 0:
                 self.log_entry(
                     f"year {(self.time) / yr:0.1f} - Sailing with velocity "
-                    f"{self.velocity / (m / s)} m/s."
+                    f"{self.velocity / (m / s)} m/s with acceleration "
+                    f"{acceleration / g}g."
                 )
             iteration += 1
-            if iteration > 1.0e6:
+            if iteration > max_iterations:
                 print("Warning: too many iterations used for solar sailing. "
                       "Consider increasing time_step size.")
                 break
-
+        self.log_entry(
+            f"year {(self.time) / yr:0.1f} - Finished sailing. velocity "
+            f"{self.velocity / (m / s)} m/s. Traveling at "
+            f"{self.velocity / max_velocity * 100:0.1f}% of maximum sail velocity. "
+            f"Sailing time was "
+            f"{iteration * time_step / (24 * 3600 * s)} days."
+        )
 
     def print_history(self):
         """Print mission logs and messages"""
