@@ -39,7 +39,8 @@ class SolarSail:
                 The characterisitic acceleration of the sail
         """
         total_mass = self.sail_mass + payload_mass
-        characteristic_accel = self.reflectivity * (9.126e-6 * m / s ** 2) * \
+        radiation_pressure_1au = 9.126e-6 * m / s ** 2
+        characteristic_accel = self.reflectivity * radiation_pressure_1au * \
             np.pi * (self.sail_radius / m) ** 2 \
             / (total_mass / kg)
         return characteristic_accel
@@ -73,6 +74,10 @@ class SolarSail:
 
     def final_velocity(self, payload_mass, initial_distance_from_star):
         """Expected final velocity assuming starting from rest.
+
+        See p. 14 of Spieth&Zubrin,
+        Ultra-Thin Solar Sails for Interstellar Travel, 1999
+        http://www.niac.usra.edu/files/studies/final_report/333Christensen.pdf
 
         Args
             payload_mass (mass)

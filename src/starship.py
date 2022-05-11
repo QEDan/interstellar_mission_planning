@@ -145,7 +145,8 @@ class Starship:
              max_accel=None,
              log_freq=10000,
              max_iterations=1e6,
-             decelerate=False):
+             decelerate=False,
+             convergence_threshold=1.0e-8):
         """Accelerate or decelerate using solar sails."""
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
@@ -194,6 +195,9 @@ class Starship:
             if iteration > max_iterations:
                 print("Warning: too many iterations used for solar sailing. "
                       "Consider increasing time_step size.")
+                break
+            if (acceleration * time_step / self.velocity) < convergence_threshold:
+                print("Final sailing velocity has converged.")
                 break
         self.log_entry(
             f"year {(self.time) / yr:0.1f} - Finished sailing. velocity "
