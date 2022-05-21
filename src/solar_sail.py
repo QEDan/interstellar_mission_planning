@@ -46,7 +46,7 @@ class SolarSail:
         return characteristic_accel
 
     def acceleration(self,
-                     distance_from_star,
+                     relative_position_from_star,
                      payload_mass,
                      max_accel=None):
         """Returns the acceleration of the sailing starcraft
@@ -54,7 +54,7 @@ class SolarSail:
         See page 94 of Starflight Handbook, Mallove and Matloff
 
         Args
-            distance_from_star (distance)
+            relative_position_from_star (distance)
                 Distance of circular sail from star
             payload_mass (mass)
                 payload mass
@@ -67,9 +67,11 @@ class SolarSail:
         """
         total_mass = self.sail_mass + payload_mass
         accel = (1 + self.reflectivity) * 6.3e17 * (self.sail_radius / m) ** 2 \
-            / (2 * (total_mass / kg) * (distance_from_star / m) ** 2) * (m / s ** 2)
+                / (2 * (total_mass / kg) * (relative_position_from_star / m) ** 2) * (m / s ** 2)
         if max_accel:
             accel = min(accel / g, max_accel / g) * g
+        if relative_position_from_star / m < 0:
+            accel *= -1.0
         return accel
 
     def final_velocity(self, payload_mass, initial_distance_from_star):
@@ -90,5 +92,5 @@ class SolarSail:
         """
         final_velocity = (548000 * m / s) * np.sqrt(
             self.characteristic_acceleration(payload_mass) / (m / s ** 2)
-            / (initial_distance_from_star / astronomical_unit))
+            / abs(initial_distance_from_star / astronomical_unit))
         return final_velocity

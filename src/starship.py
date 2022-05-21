@@ -1,6 +1,7 @@
 """Starship class"""
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.integrate
 from scimath.units.length import kilometers as km, astronomical_unit
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
@@ -140,71 +141,73 @@ class Starship:
 
     def sail(self,
              target_velocity,
-             time_step=60.0 * s,
-             initial_distance_to_star=astronomical_unit,
+             relative_position_to_star=astronomical_unit,
              max_accel=None,
-             log_freq=10000,
-             max_iterations=1e6,
-             decelerate=False,
-             convergence_threshold=1.0e-8):
+             max_sail_time=14 * 24 * 3600 * s):
         """Accelerate or decelerate using solar sails."""
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
         max_velocity = self.solar_sail.final_velocity(
             self.total_mass() - self.solar_sail.sail_mass,
-            initial_distance_to_star)
+            relative_position_to_star)
         if target_velocity is None:
-            if decelerate:
-                target_velocity = 1.0e-22 * max_velocity
+            if relative_position_to_star / m < 0.0:
+                target_velocity = 0.0 * m / s
             else:
-                target_velocity = 0.99 * max_velocity
-        if target_velocity / c > max_velocity / c and not decelerate:
+                target_velocity = 0.90 * max_velocity
+        if abs(target_velocity / c) > abs(max_velocity / c):
             raise ValueError(f"Unable to achieve velocity {target_velocity / c}c "
                              f"through sailing. Maximum achievable velocity"
                              f" is {max_velocity / c}c.")
-        distance_to_star = initial_distance_to_star
-        iteration = 0
 
-        def velocity_condition():
-            if decelerate:
-                condition = self.velocity / c > target_velocity / c
-            else:
-                condition = self.velocity / c < target_velocity / c
-            return condition
-        while velocity_condition():
-            self.time += time_step
-            acceleration = self.solar_sail.acceleration(distance_to_star,
-                                                        self.total_mass(),
-                                                        max_accel=max_accel)
-            delta_position = self.velocity * time_step
-            self.position += delta_position
-            if decelerate:
-                self.velocity -= acceleration * time_step
-                distance_to_star -= delta_position
-            else:
-                self.velocity += acceleration * time_step
-                distance_to_star += delta_position
+        def integrand(_, y):
+            x, v = y[0], y[1]
+            if np.isnan(x) or np.isnan(v):
+                raise ValueError("Nan values in integrand.")
+            accel = self.solar_sail.acceleration(
+                    x * m,
+                    self.total_mass(),
+                    max_accel=max_accel
+                ) / (m / s ** 2)
+            if max_accel and abs(accel / (m / s ** 2)) > max_accel / (m / s ** 2):
+                accel = np.sign(accel) * max_accel
+            derivative = np.array([
+                v,
+                accel
+            ])
+            return derivative
 
-            if iteration % log_freq == 0:
-                self.log_entry(
-                    f"year {(self.time) / yr:0.1f} - Sailing with velocity "
-                    f"{self.velocity / (m / s)} m/s with acceleration "
-                    f"{acceleration / g}g."
-                )
-            iteration += 1
-            if iteration > max_iterations:
-                print("Warning: too many iterations used for solar sailing. "
-                      "Consider increasing time_step size.")
+        initial_velocity = self.velocity
+        y_soln = scipy.integrate.solve_ivp(
+            integrand,
+            [0, max_sail_time / s],
+            [relative_position_to_star / m, initial_velocity / (m / s)]
+        )
+        initial_position = self.position
+        for i in range(1, len(y_soln.t)):
+            self.time += (y_soln.t[i] - y_soln.t[i - 1]) * s
+            self.position = initial_position + y_soln.y[0, i] * m - relative_position_to_star
+            self.velocity = y_soln.y[1, i] * (m / s)
+            acceleration = (y_soln.y[1, i] - y_soln.y[1, i-1]) / (
+                    y_soln.t[i] - y_soln.t[i-1]) * (m / s ** 2)
+            self.log_entry(
+                f"year {(self.time) / yr:0.1f} - Sailing with velocity "
+                f"{self.velocity / (m / s)} m/s with acceleration "
+                f"{acceleration / g}g."
+            )
+            sailing_time = y_soln.t[i] * s
+            if (relative_position_to_star / m < 0 and self.velocity / c < target_velocity / c) \
+                or (relative_position_to_star / m > 0 and
+                    self.velocity / c > target_velocity / c):
                 break
-            if (acceleration * time_step / self.velocity) < convergence_threshold:
-                print("Final sailing velocity has converged.")
-                break
+        if target_velocity / (m / s ** 2) == 0.0:
+            self.velocity = 0.0 * m / s
         self.log_entry(
             f"year {(self.time) / yr:0.1f} - Finished sailing. velocity "
             f"{self.velocity / (m / s)} m/s. Traveling at "
             f"{self.velocity / max_velocity * 100:0.1f}% of maximum sail velocity. "
             f"Sailing time was "
-            f"{iteration * time_step / (24 * 3600 * s)} days."
+            f"{sailing_time / (24 * 3600 * s)} days."
         )
 
     def print_history(self):

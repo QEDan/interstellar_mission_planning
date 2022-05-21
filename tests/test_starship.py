@@ -144,11 +144,9 @@ class TestStarship:
         solar_sail = SolarSail(sail_mass, sail_radius, reflectivity=0.98)
         initial_distance = 0.02 * astronomical_unit
         self.starship.solar_sail = solar_sail
-        self.starship.sail(None, 
-                           time_step=600 * s,
-                           max_iterations=10000,
-                           initial_distance_to_star=initial_distance)
-        expected_velocity = self.starship.solar_sail.final_velocity(
+        self.starship.sail(None,
+                           relative_position_to_star=initial_distance)
+        expected_velocity = 0.9 * self.starship.solar_sail.final_velocity(
             self.starship.total_mass() - solar_sail.sail_mass,
             initial_distance,
         )
@@ -160,16 +158,29 @@ class TestStarship:
         sail_radius = 6000 * km
         sail_mass = sail_radius ** 2 * np.pi * sail_area_density
         solar_sail = SolarSail(sail_mass, sail_radius, reflectivity=0.98)
-        initial_distance = astronomical_unit
+        initial_distance = -100.0 * astronomical_unit
         self.starship.solar_sail = solar_sail
-        initial_velocity = self.starship.solar_sail.final_velocity(
+        initial_velocity = 0.9 * self.starship.solar_sail.final_velocity(
             self.starship.total_mass() - solar_sail.sail_mass,
             initial_distance,
         )
         self.starship.velocity = initial_velocity
-        self.starship.sail(None, 
-                           time_step=600 * s,
-                           max_iterations=10000,
-                           initial_distance_to_star=initial_distance,
-                           decelerate=True)
-        assert self.starship.velocity / initial_velocity < 1.0e-3
+        self.starship.sail(None,
+                           relative_position_to_star=initial_distance)
+        assert (self.starship.velocity - initial_velocity) / initial_velocity < 1.0e-3
+
+    def test_sail_accel_deccel(self):
+        sail_area_density = 0.00003 * kg / m ** 2  # Carbon nanotube sheets
+        sail_radius = 6000 * km
+        sail_mass = sail_radius ** 2 * np.pi * sail_area_density
+        solar_sail = SolarSail(sail_mass, sail_radius, reflectivity=0.98)
+        initial_distance = 0.02 * astronomical_unit
+        self.starship.position = initial_distance
+        self.starship.solar_sail = solar_sail
+        self.starship.sail(None,
+                           relative_position_to_star=initial_distance)
+        self.starship.position *= -1.0
+        self.starship.sail(None,
+                           relative_position_to_star=self.starship.position)
+        assert self.starship.velocity / c < 1.0e-3
+        assert self.starship.position / m < 1.0e3
