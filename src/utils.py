@@ -1,4 +1,5 @@
 """Utility functions for mission planning"""
+# pylint: disable=cyclic-import
 from src.constants import G, solar_mass
 
 

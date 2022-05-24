@@ -67,7 +67,7 @@ class SolarSail:
         """
         total_mass = self.sail_mass + payload_mass
         accel = (1 + self.reflectivity) * 6.3e17 * (self.sail_radius / m) ** 2 \
-                / (2 * (total_mass / kg) * (relative_position_from_star / m) ** 2) * (m / s ** 2)
+            / (2 * (total_mass / kg) * (relative_position_from_star / m) ** 2) * (m / s ** 2)
         if max_accel:
             accel = min(accel / g, max_accel / g) * g
         if relative_position_from_star / m < 0:

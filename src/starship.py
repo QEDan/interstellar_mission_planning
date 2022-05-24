@@ -8,7 +8,9 @@ from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
 from scimath.units.time import years as yr
+from scimath.units import unit
 
+from src.solar_sail import SolarSail
 from src.constants import c, g
 
 
@@ -17,11 +19,11 @@ class Starship:
     def __init__(self,
                  payload_mass,
                  engines: dict,
-                 initial_velocity=0 * m / s,
-                 initial_position=0 * km,
-                 initial_time=0 * s,
-                 destination_distance=4.244 * ly,
-                 solar_sail=None
+                 initial_velocity: unit = 0 * m / s,
+                 initial_position: unit = 0 * km,
+                 initial_time: unit = 0 * s,
+                 destination_distance: unit = 4.244 * ly,
+                 solar_sail: SolarSail = None
                  ):
         self.payload_mass = payload_mass
         self.engines = engines
@@ -30,8 +32,8 @@ class Starship:
         self.time = initial_time
         self.destination_distance = destination_distance
         self.solar_sail = solar_sail
-        self.history = list()
-        self.log_messages = list()
+        self.history = []
+        self.log_messages = []
         self.log_entry()
 
     def log_entry(self, message: str = ''):
@@ -56,16 +58,18 @@ class Starship:
         return mass
 
     def accelerate(self,
-                   engine_name='main',
-                   target_velocity=0 * km / s,
-                   fuel_mass=None,
-                   decelerate=False,
-                   acceleration=g):
+                   engine_name: str = 'main',
+                   target_velocity: unit = 0 * km / s,
+                   fuel_mass: unit = None,
+                   decelerate: bool = False,
+                   acceleration: unit = g) -> unit:
         """Accelerate the ship by burning a specified quantity of fuel.
 
         If no fuel mass is specified, a target_velocity should be specified instead.
 
         Args:
+            engine_name: src
+                Name of the engine
             target_velocity: unit (speed)
                 Target velocity to accelerate to.
             fuel_mass: unit (mass)
@@ -117,7 +121,7 @@ class Starship:
 
         return self.velocity
 
-    def cruise(self, distance):
+    def cruise(self, distance: unit):
         """Travel at current velocity without acceleration"""
         if self.velocity == 0:
             raise ValueError("The starship is not moving. Can't cruise.")
@@ -130,7 +134,7 @@ class Starship:
             f"Cruise: {delta_t / yr:0.2e} years to complete. "
             f"Distance={distance / ly:0.2e} lightyears")
 
-    def wait(self, time):
+    def wait(self, time: unit):
         """Pass time with no acceleration"""
         self.time += time
         distance = self.velocity * time
@@ -140,10 +144,10 @@ class Starship:
             f"Distance={distance / ly:0.2e} lightyears")
 
     def sail(self,
-             target_velocity,
-             relative_position_to_star=astronomical_unit,
-             max_accel=None,
-             max_sail_time=14 * 24 * 3600 * s):
+             target_velocity: unit,
+             relative_position_to_star: unit = astronomical_unit,
+             max_accel: unit = None,
+             max_sail_time: unit = 14 * 24 * 3600 * s):
         """Accelerate or decelerate using solar sails."""
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
@@ -160,19 +164,19 @@ class Starship:
                              f"through sailing. Maximum achievable velocity"
                              f" is {max_velocity / c}c.")
 
-        def integrand(_, y):
-            x, v = y[0], y[1]
-            if np.isnan(x) or np.isnan(v):
+        def integrand(_, pos_vel):
+            pos, vel = pos_vel[0], pos_vel[1]
+            if np.isnan(pos) or np.isnan(vel):
                 raise ValueError("Nan values in integrand.")
             accel = self.solar_sail.acceleration(
-                    x * m,
-                    self.total_mass(),
-                    max_accel=max_accel
-                ) / (m / s ** 2)
+                pos * m,
+                self.total_mass(),
+                max_accel=max_accel
+            ) / (m / s ** 2)
             if max_accel and abs(accel / (m / s ** 2)) > max_accel / (m / s ** 2):
                 accel = np.sign(accel) * max_accel
             derivative = np.array([
-                v,
+                vel,
                 accel
             ])
             return derivative
@@ -188,8 +192,8 @@ class Starship:
             self.time += (y_soln.t[i] - y_soln.t[i - 1]) * s
             self.position = initial_position + y_soln.y[0, i] * m - relative_position_to_star
             self.velocity = y_soln.y[1, i] * (m / s)
-            acceleration = (y_soln.y[1, i] - y_soln.y[1, i-1]) / (
-                    y_soln.t[i] - y_soln.t[i-1]) * (m / s ** 2)
+            acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / (
+                y_soln.t[i] - y_soln.t[i - 1]) * (m / s ** 2)
             self.log_entry(
                 f"year {(self.time) / yr:0.1f} - Sailing with velocity "
                 f"{self.velocity / (m / s)} m/s with acceleration "
