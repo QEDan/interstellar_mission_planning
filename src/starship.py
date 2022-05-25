@@ -2,16 +2,17 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.integrate
+from scimath.units import unit
 from scimath.units.length import kilometers as km, astronomical_unit
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
 from scimath.units.time import years as yr
-from scimath.units import unit
 
-from src.solar_sail import SolarSail
 from src.constants import c, g
+from src.solar_sail import SolarSail
+from src.swimmer import Swimmer
 
 
 class Starship:
@@ -23,7 +24,8 @@ class Starship:
                  initial_position: unit = 0 * km,
                  initial_time: unit = 0 * s,
                  destination_distance: unit = 4.244 * ly,
-                 solar_sail: SolarSail = None
+                 solar_sail: SolarSail = None,
+                 swimmer: Swimmer = None
                  ):
         self.payload_mass = payload_mass
         self.engines = engines
@@ -32,6 +34,7 @@ class Starship:
         self.time = initial_time
         self.destination_distance = destination_distance
         self.solar_sail = solar_sail
+        self.swimmer = swimmer
         self.history = []
         self.log_messages = []
         self.log_entry()
@@ -212,6 +215,52 @@ class Starship:
             f"{self.velocity / max_velocity * 100:0.1f}% of maximum sail velocity. "
             f"Sailing time was "
             f"{sailing_time / (24 * 3600 * s)} days."
+        )
+
+    def swim(self,
+             power_delivered: unit,
+             swim_time: unit):
+        """Accelerate or decelerate using solar sails."""
+        if self.swimmer is None:
+            raise RuntimeError("This starship has no SWIMMER engine. Cannot swim.")
+
+        def integrand(_, pos_vel):
+            pos, vel = pos_vel[0], pos_vel[1]
+            if np.isnan(pos) or np.isnan(vel):
+                raise ValueError("Nan values in integrand.")
+            accel = self.swimmer.acceleration(
+                power_delivered,
+                abs(vel) * m / s,
+                self.total_mass()
+            ) / (m / s ** 2)
+            derivative = np.array([
+                vel,
+                accel
+            ])
+            return derivative
+
+        y_soln = scipy.integrate.solve_ivp(
+            integrand,
+            [0, swim_time / s],
+            [self.position / m, self.velocity / (m / s)]
+        )
+        for i in range(1, len(y_soln.t)):
+            self.time += (y_soln.t[i] - y_soln.t[i - 1]) * s
+            self.position = y_soln.y[0, i] * m
+            self.velocity = y_soln.y[1, i] * (m / s)
+            acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / (
+                y_soln.t[i] - y_soln.t[i - 1]) * (m / s ** 2)
+            self.log_entry(
+                f"year {(self.time) / yr:0.1f} - Swimming with velocity "
+                f"{self.velocity / (m / s)} m/s with acceleration "
+                f"{acceleration / g}g."
+            )
+            swim_time = y_soln.t[i] * s
+        self.log_entry(
+            f"year {(self.time) / yr:0.1f} - Finished sailing. velocity "
+            f"{self.velocity / (m / s)} m/s. "
+            f"Swimming time was "
+            f"{swim_time / (24 * 3600 * s)} days."
         )
 
     def print_history(self):

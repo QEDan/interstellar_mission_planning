@@ -7,8 +7,9 @@ from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
 
-from src import SolarSail, Engine, Starship
-from src.constants import g, c
+from src import SolarSail, Engine, Starship, Swimmer
+from src.constants import g, c, year
+
 
 class TestStarship:
     """Tests for the Starship class"""
@@ -184,3 +185,19 @@ class TestStarship:
                            relative_position_to_star=self.starship.position)
         assert self.starship.velocity / c < 1.0e-3
         assert self.starship.position / m < 1.0e3
+
+    def test_swim(self):
+        power_delivered = 1.0e13 * kg * m ** 2 / s ** 3
+        pusher_area = 2.0e19 * m ** 2
+        swim_time = 1.0 * year
+        swimmer = Swimmer(pusher_area)
+        initial_velocity = 0.01 * c
+        self.starship.velocity = initial_velocity
+        self.starship.swimmer = swimmer
+        self.starship.swim(
+            power_delivered,
+            swim_time
+        )
+
+        assert self.starship.velocity / (m / s) > initial_velocity / (m / s)
+        assert self.starship.position / astronomical_unit > 0.0
