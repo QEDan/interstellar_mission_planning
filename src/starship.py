@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy.integrate
 from scimath.units import unit
-from scimath.units.length import kilometers as km, astronomical_unit
+from scimath.units.length import kilometers as km
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
@@ -53,6 +53,8 @@ class Starship:
         total_mass = self.payload_mass + self.fuel_mass()
         if self.solar_sail is not None:
             total_mass += self.solar_sail.sail_mass
+        if self.swimmer is not None:
+            total_mass += self.swimmer.pusher_mass()
         return total_mass
 
     def fuel_mass(self):
@@ -64,7 +66,7 @@ class Starship:
                    engine_name: str = 'main',
                    target_velocity: unit = 0 * km / s,
                    fuel_mass: unit = None,
-                   decelerate: bool = False,
+                   direction: int = 1,
                    acceleration: unit = g) -> unit:
         """Accelerate the ship by burning a specified quantity of fuel.
 
@@ -77,9 +79,9 @@ class Starship:
                 Target velocity to accelerate to.
             fuel_mass: unit (mass)
                 Amount of fuel mass to burn
-            decelerate: bool
-                If True, acceleration is toward the origin.
-                If False, acceleration is toward the destination
+            direction: int
+                If 1, acceleration is in the positive direction
+                If -1, acceleration is in the negative direction
 
         Returns:
             unit (speed)
@@ -89,12 +91,8 @@ class Starship:
             delta_v = self.engines[engine_name].burn_fuel(fuel_mass, self.total_mass())
             delta_t = np.abs(delta_v) / acceleration
             self.time += delta_t
-            if decelerate:
-                delta_pos = self.velocity * delta_t - 0.5 * acceleration * delta_t ** 2
-                self.velocity -= delta_v
-            else:
-                delta_pos = self.velocity * delta_t + 0.5 * acceleration * delta_t ** 2
-                self.velocity += delta_v
+            delta_pos = self.velocity * delta_t + direction * 0.5 * acceleration * delta_t ** 2
+            self.velocity += direction * delta_v
             self.time += np.abs(delta_v) / acceleration
             self.position += delta_pos
 
@@ -103,10 +101,7 @@ class Starship:
                 self.velocity - target_velocity, self.total_mass())
             delta_v = target_velocity - self.velocity
             delta_t = np.abs(delta_v) / acceleration
-            if decelerate:
-                delta_pos = self.velocity * delta_t - 0.5 * acceleration * delta_t ** 2
-            else:
-                delta_pos = self.velocity * delta_t + 0.5 * acceleration * delta_t ** 2
+            delta_pos = self.velocity * delta_t + direction * 0.5 * acceleration * delta_t ** 2
             self.time += delta_t
             self.velocity = target_velocity
             self.position += delta_pos
@@ -148,20 +143,22 @@ class Starship:
 
     def sail(self,
              target_velocity: unit,
-             relative_position_to_star: unit = astronomical_unit,
+             position_of_star: unit = 0.0 * m,
              max_accel: unit = None,
              max_sail_time: unit = 14 * 24 * 3600 * s):
         """Accelerate or decelerate using solar sails."""
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
+        relative_position_to_star = self.position - position_of_star
         max_velocity = self.solar_sail.final_velocity(
             self.total_mass() - self.solar_sail.sail_mass,
             relative_position_to_star)
         if target_velocity is None:
-            if relative_position_to_star / m < 0.0:
+            if np.sign(relative_position_to_star / m) == np.sign(self.velocity / c):
+                # Deceleration scenario
                 target_velocity = 0.0 * m / s
             else:
-                target_velocity = 0.90 * max_velocity
+                target_velocity = 0.90 * max_velocity * np.sign(relative_position_to_star / m)
         if abs(target_velocity / c) > abs(max_velocity / c):
             raise ValueError(f"Unable to achieve velocity {target_velocity / c}c "
                              f"through sailing. Maximum achievable velocity"
@@ -176,7 +173,7 @@ class Starship:
                 self.total_mass(),
                 max_accel=max_accel
             ) / (m / s ** 2)
-            if max_accel and abs(accel / (m / s ** 2)) > max_accel / (m / s ** 2):
+            if max_accel and abs(accel) > max_accel / (m / s ** 2):
                 accel = np.sign(accel) * max_accel
             derivative = np.array([
                 vel,
@@ -203,9 +200,9 @@ class Starship:
                 f"{acceleration / g}g."
             )
             sailing_time = y_soln.t[i] * s
-            if (relative_position_to_star / m < 0 and self.velocity / c < target_velocity / c) \
-                or (relative_position_to_star / m > 0 and
-                    self.velocity / c > target_velocity / c):
+            if (np.sign(relative_position_to_star / m) == np.sign(self.velocity / c))\
+                    and abs(self.velocity / c) > abs(target_velocity / c):
+                # Acceleration scenario, target velocity achieved
                 break
         if target_velocity / (m / s ** 2) == 0.0:
             self.velocity = 0.0 * m / s
@@ -219,7 +216,8 @@ class Starship:
 
     def swim(self,
              power_delivered: unit,
-             swim_time: unit):
+             swim_time: unit,
+             direction: int = 1):
         """Accelerate or decelerate using solar sails."""
         if self.swimmer is None:
             raise RuntimeError("This starship has no SWIMMER engine. Cannot swim.")
@@ -227,12 +225,15 @@ class Starship:
         def integrand(_, pos_vel):
             pos, vel = pos_vel[0], pos_vel[1]
             if np.isnan(pos) or np.isnan(vel):
-                raise ValueError("Nan values in integrand.")
+                raise ValueError("Nan values in SWIMMER integrand.")
+            braking = np.sign(vel) != direction
             accel = self.swimmer.acceleration(
                 power_delivered,
                 abs(vel) * m / s,
-                self.total_mass()
+                self.total_mass(),
+                braking=braking
             ) / (m / s ** 2)
+            accel *= direction
             derivative = np.array([
                 vel,
                 accel
@@ -257,7 +258,7 @@ class Starship:
             )
             swim_time = y_soln.t[i] * s
         self.log_entry(
-            f"year {(self.time) / yr:0.1f} - Finished sailing. velocity "
+            f"year {(self.time) / yr:0.1f} - Finished swimming. velocity "
             f"{self.velocity / (m / s)} m/s. "
             f"Swimming time was "
             f"{swim_time / (24 * 3600 * s)} days."
@@ -285,7 +286,7 @@ class Starship:
             times.append(log['time'] / yr)
         return positions, velocities, fuels, times
 
-    def plot_history(self):
+    def plot_history(self, show_destination: bool = True):
         """Return a matplotlib figure showing mission history"""
         positions, velocities, fuels, times = self.parse_logs()
         fig = plt.figure(figsize=(12, 12))
@@ -301,10 +302,11 @@ class Starship:
         plt.plot(times, positions)
         plt.xlabel('Time (years)')
         plt.ylabel('Position (light years)')
-        plt.hlines(self.destination_distance / ly,
-                   min(times),
-                   max(times),
-                   label='Destination',
-                   linestyles='dashed')
+        if show_destination:
+            plt.hlines(self.destination_distance / ly,
+                       min(times),
+                       max(times),
+                       label='Destination',
+                       linestyles='dashed')
         plt.legend()
         return fig

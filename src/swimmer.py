@@ -47,6 +47,7 @@ class Swimmer:
                      total_mass: unit,
                      braking: bool = False) -> unit:
         """Compute the acceleration from the SWIMMER engine."""
+        # TODO: Understand the sign choice and direction.
         sign = -1 if braking else 1
         exposure = self.pusher_area * self.ion_mass * self.ion_density * abs_velocity
         force_unit = kg * m / s ** 2
