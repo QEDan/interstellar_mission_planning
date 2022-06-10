@@ -154,7 +154,7 @@ class Starship:
             self.total_mass() - self.solar_sail.sail_mass,
             relative_position_to_star)
         if target_velocity is None:
-            if np.sign(relative_position_to_star / m) == np.sign(self.velocity / c):
+            if np.sign(relative_position_to_star / m) == -1 * np.sign(self.velocity / c):
                 # Deceleration scenario
                 target_velocity = 0.0 * m / s
             else:
@@ -173,8 +173,6 @@ class Starship:
                 self.total_mass(),
                 max_accel=max_accel
             ) / (m / s ** 2)
-            if max_accel and abs(accel) > max_accel / (m / s ** 2):
-                accel = np.sign(accel) * max_accel
             derivative = np.array([
                 vel,
                 accel
@@ -200,11 +198,15 @@ class Starship:
                 f"{acceleration / g}g."
             )
             sailing_time = y_soln.t[i] * s
+            if target_velocity / (m / s) == 0.0 \
+                    and np.sign(self.velocity / c) != np.sign(y_soln.y[1, i - 1]):
+                # Deceleration scenario, zero velocity achieved
+                break
             if (np.sign(relative_position_to_star / m) == np.sign(self.velocity / c))\
                     and abs(self.velocity / c) > abs(target_velocity / c):
                 # Acceleration scenario, target velocity achieved
                 break
-        if target_velocity / (m / s ** 2) == 0.0:
+        if target_velocity / (m / s) == 0.0:
             self.velocity = 0.0 * m / s
         self.log_entry(
             f"year {(self.time) / yr:0.1f} - Finished sailing. velocity "

@@ -70,8 +70,7 @@ class SolarSail:
             / (2 * (total_mass / kg) * (relative_position_from_star / m) ** 2) * (m / s ** 2)
         if max_accel:
             accel = min(accel / g, max_accel / g) * g
-        if relative_position_from_star / m < 0:
-            accel *= -1.0
+        accel *= np.sign(relative_position_from_star / m)
         return accel
 
     def final_velocity(self, payload_mass, initial_distance_from_star):

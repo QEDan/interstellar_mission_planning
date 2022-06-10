@@ -3,12 +3,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 from scimath.units.length import kilometers as km, astronomical_unit
+from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
 
 from src import SolarSail, Engine, Starship, Swimmer
-from src.constants import g, c, year
+from src.constants import c, year
 
 
 class TestStarship:
@@ -178,8 +179,8 @@ class TestStarship:
             self.starship.total_mass() - solar_sail.sail_mass,
             initial_distance,
         )
-        assert abs((self.starship.velocity / c - expected_velocity / c)
-                   / (expected_velocity / c)) < 0.1
+        assert abs((self.starship.velocity - expected_velocity)
+                   / expected_velocity) < 0.1
         assert direction * self.starship.position / astronomical_unit > 1.0e-2
 
     @pytest.mark.parametrize('direction', [1, -1])
@@ -188,7 +189,7 @@ class TestStarship:
         sail_radius = 6000 * km
         sail_mass = sail_radius ** 2 * np.pi * sail_area_density
         solar_sail = SolarSail(sail_mass, sail_radius, reflectivity=0.98)
-        initial_distance = direction * -100.0 * astronomical_unit
+        initial_distance = direction * -8.0 * astronomical_unit
         self.starship.position = initial_distance
         self.starship.solar_sail = solar_sail
         initial_velocity = 0.9 * self.starship.solar_sail.final_velocity(
@@ -197,8 +198,29 @@ class TestStarship:
         ) * direction
         self.starship.velocity = initial_velocity
         self.starship.sail(None,
-                           position_of_star=0.0 * m)
-        assert abs(self.starship.velocity - initial_velocity) / initial_velocity < 1.0e-3
+                           position_of_star=0.0 * m,
+                           max_sail_time=100.00 * 3600 * 24 * 365 * s)
+        assert abs(self.starship.velocity / initial_velocity) < 1.0e-3
+
+    @pytest.mark.parametrize('direction', [1, -1])
+    def test_sail_decelerate_destination(self, direction):
+        sail_area_density = 0.00003 * kg / m ** 2  # Carbon nanotube sheets
+        sail_radius = 6000 * km
+        sail_mass = sail_radius ** 2 * np.pi * sail_area_density
+        solar_sail = SolarSail(sail_mass, sail_radius, reflectivity=0.98)
+        total_distance = 4.244 * ly
+        initial_distance = total_distance + direction * -8.0 * astronomical_unit
+        self.starship.position = initial_distance
+        self.starship.solar_sail = solar_sail
+        initial_velocity = 0.9 * self.starship.solar_sail.final_velocity(
+            self.starship.total_mass() - solar_sail.sail_mass,
+            initial_distance,
+        ) * direction
+        self.starship.velocity = initial_velocity
+        self.starship.sail(0.0 * c,
+                           position_of_star=total_distance)
+        assert abs(self.starship.velocity) / initial_velocity < 1.0e-3
+
 
     @pytest.mark.parametrize('direction', [1, -1])
     def test_sail_accel_deccel(self, direction):
@@ -234,4 +256,5 @@ class TestStarship:
             direction=accel_direction
         )
 
-        assert np.sign(initial_velocity / (m / s) - self.starship.velocity / (m / s)) == accel_direction
+        assert np.sign(self.starship.velocity / (m / s)
+                       - initial_velocity / (m / s)) == accel_direction
