@@ -1,24 +1,33 @@
 name: interstellar
 channels:
   - defaults
-  - anaconda
-  - conda-forge
 dependencies:
   - _libgcc_mutex=0.1=main
   - _openmp_mutex=4.5=1_gnu
-  - ca-certificates=2021.1.19=h06a4308_0
-  - certifi=2020.12.5=py39h06a4308_0
+  - ca-certificates=2021.7.5=h06a4308_1
+  - certifi=2021.5.30=py39h06a4308_0
+  - iniconfig=1.1.1=pyhd3eb1b0_0
+  - ld_impl_linux-64=2.35.1=h2b15070_1
   - libedit=3.1.20191231=h14c3975_1
   - libffi=3.3=he6710b0_2
+  - libgcc-ng=9.3.0=h9cbead1_17
+  - libgomp=9.3.0=h9cbead1_17
   - libstdcxx-ng=9.3.0=h2ae2ef3_17
+  - mock=4.0.3=pyhd3eb1b0_0
+  - more-itertools=8.8.0=pyhd3eb1b0_0
   - ncurses=6.2=he6710b0_1
-  - openssl=1.1.1i=h27cfd23_0
+  - openssl=1.1.1k=h27cfd23_0
   - pip=20.3.3=py39h06a4308_0
+  - pluggy=0.13.1=py39h06a4308_0
+  - py=1.10.0=pyhd3eb1b0_0
+  - pyparsing=2.4.7=pyhd3eb1b0_0
+  - pytest=6.2.4=py39h06a4308_2
   - python=3.9.1=hdb3f193_2
   - readline=8.1=h27cfd23_0
   - setuptools=52.0.0=py39h06a4308_0
   - sqlite=3.33.0=h62c20be_0
   - tk=8.6.10=hbc83047_0
+  - toml=0.10.2=pyhd3eb1b0_0
   - tzdata=2020f=h52ac0ba_0
   - wheel=0.36.2=pyhd3eb1b0_0
   - xz=5.2.5=h7b6447c_0
@@ -72,6 +81,7 @@ dependencies:
     - notebook==6.2.0
     - numpy==1.20.1
     - packaging==20.9
+    - pandas==1.4.3
     - pandocfilters==1.4.3
     - parso==0.8.1
     - pexpect==4.8.0
@@ -85,9 +95,10 @@ dependencies:
     - pyflakes==2.3.1
     - pygments==2.7.4
     - pylint==2.9.6
-    - pyparsing==2.4.7
     - pyrsistent==0.17.3
+    - pytest-mock==3.6.1
     - python-dateutil==2.8.1
+    - pytz==2022.1
     - pyzmq==22.0.2
     - qtconsole==5.0.2
     - qtpy==1.9.0
@@ -98,7 +109,6 @@ dependencies:
     - six==1.15.0
     - terminado==0.9.2
     - testpath==0.4.4
-    - toml==0.10.2
     - tornado==6.1
     - traitlets==5.0.5
     - traits==6.2.0
@@ -110,3 +120,4 @@ dependencies:
     - widgetsnbextension==3.5.1
     - wrapt==1.12.1
     - yarl==1.6.3
+prefix: /home/mazur/linstore/Software/anaconda3/envs/interstellar
