@@ -6,7 +6,7 @@ from scimath.units.length import kilometers as km, astronomical_unit
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
-from scimath.units.time import seconds as s
+from scimath.units.time import seconds as s, years
 
 from src import SolarSail, Engine, Starship, Swimmer
 from src.constants import c, year
@@ -44,6 +44,20 @@ class TestStarship:
         mass = self.starship.fuel_mass()
         assert isinstance(mass / kg, float)
         assert mass == self.fuel_mass
+
+    @pytest.mark.parametrize('generate_electricity', [True, False])
+    def test_generate_electricity(self, generate_electricity):
+        delta_t = 1 * years
+        total_energy = self.starship.electrical_power * delta_t
+        initial_payload_mass = self.starship.payload_mass
+        initial_fuel_mass = self.starship.fuel_mass()
+        self.starship.generate_electricity(total_energy)
+        mass_defect = (initial_fuel_mass + initial_payload_mass) - \
+                      (self.starship.payload_mass + self.starship.fuel_mass())
+        assert self.starship.payload_mass / kg > initial_payload_mass / kg
+        assert self.starship.fuel_mass() / kg < initial_fuel_mass / kg
+        assert mass_defect / kg > 0.0
+
 
     @pytest.mark.parametrize('fuel_fraction', [0.1, 0.5, 0.9])
     @pytest.mark.parametrize('direction', [1, -1])

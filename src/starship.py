@@ -1,8 +1,11 @@
 """Starship class"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.integrate
 from scimath.units import unit
+from scimath.units.SI import watt
+from scimath.units.energy import MeV
 from scimath.units.length import kilometers as km
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
@@ -10,7 +13,7 @@ from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
 from scimath.units.time import years as yr
 
-from src.constants import c, g
+from src.constants import c, g, mass_3He, mass_2H, mass_p, mass_4He
 from src.solar_sail import SolarSail
 from src.swimmer import Swimmer
 
@@ -24,6 +27,7 @@ class Starship:
                  initial_position: unit = 0 * km,
                  initial_time: unit = 0 * s,
                  destination_distance: unit = 4.244 * ly,
+                 electrical_power: unit = 1.5e11 * watt,
                  solar_sail: SolarSail = None,
                  swimmer: Swimmer = None
                  ):
@@ -33,6 +37,7 @@ class Starship:
         self.position = initial_position
         self.time = initial_time
         self.destination_distance = destination_distance
+        self.electrical_power = electrical_power
         self.solar_sail = solar_sail
         self.swimmer = swimmer
         self.history = []
@@ -62,12 +67,47 @@ class Starship:
         mass = sum([(e.fuel_mass / kg) for e in self.engines.values()]) * kg
         return mass
 
+    def generate_electricity(self,
+                             energy_needed: unit,
+                             efficiency: float = 0.7) -> None:
+        """Assume the engines will be used for electricity generation rather than propulsion
+        to adjust masses.
+
+        This calculation currently assumes the main reaction is 3He + 2H -> p + 4He.
+        """
+        energy_fusion = 18.354 * MeV
+        num_reactions = energy_needed / (efficiency * energy_fusion)
+        fuel_mass_lost = num_reactions * (mass_3He + mass_2H)
+        if self.fuel_mass() / kg < fuel_mass_lost / kg:
+            raise ValueError(f"Cannot generate {energy_needed} of electricity with "
+                             f"only {self.fuel_mass()} of fuel.")
+        payload_mass_gained = num_reactions * (mass_p + mass_4He)
+        fuel_mass_lost_per_engine = fuel_mass_lost / float(len(self.engines))
+        engine_index = 0
+        total_loop_index = 0
+        engine_keys = list(self.engines.keys())
+        while fuel_mass_lost / kg > 1.0e-6 * fuel_mass_lost / kg:
+            engine = self.engines[engine_keys[engine_index]]
+            if engine.fuel_mass / kg > fuel_mass_lost_per_engine / kg:
+                engine.fuel_mass -= fuel_mass_lost_per_engine
+                fuel_mass_lost -= fuel_mass_lost_per_engine
+            engine_index += 1
+            total_loop_index += 1
+            if engine_index >= len(self.engines):
+                engine_index = 0
+                fuel_mass_lost_per_engine /= 2.0
+            if total_loop_index > 100 * len(self.engines):
+                raise RuntimeError("Stuck in a loop trying to draw "
+                                   "fuel from engines for electricity.")
+        self.payload_mass += payload_mass_gained
+
     def accelerate(self,
                    engine_name: str = 'main',
                    target_velocity: unit = 0 * km / s,
                    fuel_mass: unit = None,
                    direction: int = 1,
-                   acceleration: unit = g) -> unit:
+                   acceleration: unit = g,
+                   generate_electricity: bool = True) -> unit:
         """Accelerate the ship by burning a specified quantity of fuel.
 
         If no fuel mass is specified, a target_velocity should be specified instead.
@@ -105,6 +145,8 @@ class Starship:
             self.time += delta_t
             self.velocity = target_velocity
             self.position += delta_pos
+            if generate_electricity:
+                self.generate_electricity(self.electrical_power * delta_t)
 
         if abs(self.velocity / c) > 0.5:
             raise NotImplementedError(
@@ -119,7 +161,7 @@ class Starship:
 
         return self.velocity
 
-    def cruise(self, distance: unit):
+    def cruise(self, distance: unit, generate_electricity: bool = True):
         """Travel at current velocity without acceleration"""
         if self.velocity == 0:
             raise ValueError("The starship is not moving. Can't cruise.")
@@ -127,16 +169,20 @@ class Starship:
         delta_t = np.abs(distance / self.velocity)
         self.position += delta_pos
         self.time += delta_t
+        if generate_electricity:
+            self.generate_electricity(self.electrical_power * delta_t)
         self.log_entry(
             f"year {(self.time - delta_t) / yr:0.1f} - "
             f"Cruise: {delta_t / yr:0.2e} years to complete. "
             f"Distance={distance / ly:0.2e} lightyears")
 
-    def wait(self, time: unit):
+    def wait(self, time: unit, generate_electricity: bool = True):
         """Pass time with no acceleration"""
         self.time += time
         distance = self.velocity * time
         self.position += distance
+        if generate_electricity:
+            self.generate_electricity(self.electrical_power * time)
         self.log_entry(
             f"year {(self.time - time) / yr:0.1f} - Waited: {time / yr:0.2e} years. "
             f"Distance={distance / ly:0.2e} lightyears")
@@ -145,7 +191,8 @@ class Starship:
              target_velocity: unit,
              position_of_star: unit = 0.0 * m,
              max_accel: unit = None,
-             max_sail_time: unit = 14 * 24 * 3600 * s):
+             max_sail_time: unit = 14 * 24 * 3600 * s,
+             generate_electricity: bool = True):
         """Accelerate or decelerate using solar sails."""
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
@@ -187,7 +234,8 @@ class Starship:
         )
         initial_position = self.position
         for i in range(1, len(y_soln.t)):
-            self.time += (y_soln.t[i] - y_soln.t[i - 1]) * s
+            delta_t = (y_soln.t[i] - y_soln.t[i - 1]) * s
+            self.time += delta_t
             self.position = initial_position + y_soln.y[0, i] * m - relative_position_to_star
             self.velocity = y_soln.y[1, i] * (m / s)
             acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / (
@@ -206,6 +254,8 @@ class Starship:
                     and abs(self.velocity / c) > abs(target_velocity / c):
                 # Acceleration scenario, target velocity achieved
                 break
+            if generate_electricity:
+                self.generate_electricity(self.electrical_power * delta_t)
         if target_velocity / (m / s) == 0.0:
             self.velocity = 0.0 * m / s
         self.log_entry(
@@ -219,7 +269,8 @@ class Starship:
     def swim(self,
              power_delivered: unit,
              swim_time: unit,
-             direction: int = 1):
+             direction: int = 1,
+             generate_electricity: bool = True):
         """Accelerate or decelerate using solar sails."""
         if self.swimmer is None:
             raise RuntimeError("This starship has no SWIMMER engine. Cannot swim.")
@@ -248,7 +299,8 @@ class Starship:
             [self.position / m, self.velocity / (m / s)]
         )
         for i in range(1, len(y_soln.t)):
-            self.time += (y_soln.t[i] - y_soln.t[i - 1]) * s
+            delta_t = (y_soln.t[i] - y_soln.t[i - 1]) * s
+            self.time += delta_t
             self.position = y_soln.y[0, i] * m
             self.velocity = y_soln.y[1, i] * (m / s)
             acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / (
@@ -259,6 +311,9 @@ class Starship:
                 f"{acceleration / g}g."
             )
             swim_time = y_soln.t[i] * s
+            if generate_electricity:
+                self.generate_electricity(self.electrical_power * delta_t)
+
         self.log_entry(
             f"year {(self.time) / yr:0.1f} - Finished swimming. velocity "
             f"{self.velocity / (m / s)} m/s. "
