@@ -22,12 +22,12 @@ class TestSolarSail:
     def test_characteristic_acceleration(self):
         characteristic_accel = self.sail.characteristic_acceleration(self.payload_mass)
         assert isinstance(characteristic_accel / (m / s ** 2), float)
-        assert abs(characteristic_accel / (m / s ** 2) - 0.40957) / 0.40957 < 1.0e-3
+        assert abs(characteristic_accel / (m / s ** 2) - 0.38737) / 0.38737 < 1.0e-3
 
     def test_acceleration(self):
         accel = self.sail.acceleration(2 * solar_radius, self.payload_mass)
         assert isinstance(accel / (m / s ** 2), float)
-        assert abs(accel - 500 * g) / (500 * g) < 1.0e-3
+        assert abs(accel - 507.2 * g) / (507.2 * g) < 1.0e-3
 
     def test_max_acceleration(self):
         max_accel = 0.01 * g

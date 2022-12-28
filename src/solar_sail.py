@@ -1,30 +1,38 @@
 """A solar sail to accelerate a Starship"""
+from typing import Optional
 
 import numpy as np
+from scimath.units import unit
 from scimath.units.length import astronomical_unit
 from scimath.units.length import meters as m
-from scimath.units.mass import kilograms as kg
+from scimath.units.power import watt
 from scimath.units.time import seconds as s
-from src.constants import g
+
+from src.constants import g, c
 
 
 class SolarSail:
-    """A solar sail to accelerate a Starship.
-
-
-    """
+    """A solar sail to accelerate a Starship"""
 
     def __init__(self,
-                 sail_mass,
-                 sail_radius,
-                 reflectivity=0.9
+                 sail_mass: unit,
+                 sail_radius: unit,
+                 reflectivity: float = 0.9,
+                 stellar_luminosity: unit = 3.83e26 * watt
                  ):
         self.sail_mass = sail_mass
         self.sail_radius = sail_radius
         self.reflectivity = reflectivity
+        self.stellar_luminosity = stellar_luminosity
+
+    def radiation_pressure_1au(self) -> unit:
+        """The radiation pressure at one astronomical unit"""
+        pressure = (1 + self.reflectivity) * self.stellar_luminosity / \
+                   (4 * np.pi * astronomical_unit ** 2 * c)
+        return pressure
 
     def characteristic_acceleration(self,
-                                    payload_mass):
+                                    payload_mass: unit) -> unit:
         """The characteristic acceleration of the sail
 
         See: Spieth&Zubrin, Ultra-Thin Solar Sails for Interstellar Travel, 1999
@@ -39,19 +47,19 @@ class SolarSail:
                 The characterisitic acceleration of the sail
         """
         total_mass = self.sail_mass + payload_mass
-        radiation_pressure_1au = 9.126e-6 * m / s ** 2
-        characteristic_accel = self.reflectivity * radiation_pressure_1au * \
-            np.pi * (self.sail_radius / m) ** 2 \
-            / (total_mass / kg)
+        characteristic_accel = self.reflectivity * self.radiation_pressure_1au() * \
+            np.pi * self.sail_radius ** 2 \
+            / total_mass
         return characteristic_accel
 
     def acceleration(self,
-                     relative_position_from_star,
-                     payload_mass,
-                     max_accel=None):
+                     relative_position_from_star: unit,
+                     payload_mass: unit,
+                     max_accel: Optional[unit] = None) -> unit:
         """Returns the acceleration of the sailing starcraft
 
         See page 94 of Starflight Handbook, Mallove and Matloff
+        Note: The constant 6.3e17 represents stellar_luminosity / (2 * c)
 
         Args
             relative_position_from_star (distance)
@@ -66,14 +74,16 @@ class SolarSail:
                 The acceleration of the sail and payload
         """
         total_mass = self.sail_mass + payload_mass
-        accel = (1 + self.reflectivity) * 6.3e17 * (self.sail_radius / m) ** 2 \
-            / (2 * (total_mass / kg) * (relative_position_from_star / m) ** 2) * (m / s ** 2)
+        accel = (1 + self.reflectivity) * self.stellar_luminosity * self.sail_radius ** 2 \
+            / (4 * c * total_mass * relative_position_from_star ** 2)
         if max_accel:
             accel = min(accel / g, max_accel / g) * g
         accel *= np.sign(relative_position_from_star / m)
         return accel
 
-    def final_velocity(self, payload_mass, initial_distance_from_star):
+    def final_velocity(self,
+                       payload_mass: unit,
+                       initial_distance_from_star: unit) -> unit:
         """Expected final velocity assuming starting from rest.
 
         See p. 14 of Spieth&Zubrin,
