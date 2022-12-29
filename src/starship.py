@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.integrate
-from scimath.units import unit
+from scimath.units.unit import unit
 from scimath.units.SI import watt
 from scimath.units.energy import MeV
 from scimath.units.length import kilometers as km
@@ -133,7 +133,6 @@ class Starship:
             self.time += delta_t
             delta_pos = self.velocity * delta_t + direction * 0.5 * acceleration * delta_t ** 2
             self.velocity += direction * delta_v
-            self.time += np.abs(delta_v) / acceleration
             self.position += delta_pos
 
         else:

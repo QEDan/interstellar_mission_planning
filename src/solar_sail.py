@@ -2,7 +2,7 @@
 from typing import Optional
 
 import numpy as np
-from scimath.units import unit
+from scimath.units.unit import unit
 from scimath.units.length import astronomical_unit
 from scimath.units.length import meters as m
 from scimath.units.power import watt
