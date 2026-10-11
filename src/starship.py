@@ -82,23 +82,11 @@ class Starship:
             raise ValueError(f"Cannot generate {energy_needed} of electricity with "
                              f"only {self.fuel_mass()} of fuel.")
         payload_mass_gained = num_reactions * (mass_p + mass_4He)
-        fuel_mass_lost_per_engine = fuel_mass_lost / float(len(self.engines))
-        engine_index = 0
-        total_loop_index = 0
-        engine_keys = list(self.engines.keys())
-        while fuel_mass_lost / kg > 1.0e-6 * fuel_mass_lost / kg:
-            engine = self.engines[engine_keys[engine_index]]
-            if engine.fuel_mass / kg > fuel_mass_lost_per_engine / kg:
-                engine.fuel_mass -= fuel_mass_lost_per_engine
-                fuel_mass_lost -= fuel_mass_lost_per_engine
-            engine_index += 1
-            total_loop_index += 1
-            if engine_index >= len(self.engines):
-                engine_index = 0
-                fuel_mass_lost_per_engine /= 2.0
-            if total_loop_index > 100 * len(self.engines):
-                raise RuntimeError("Stuck in a loop trying to draw "
-                                   "fuel from engines for electricity.")
+        total_fuel_kg = self.fuel_mass() / kg
+        if total_fuel_kg > 0:
+            for engine in self.engines.values():
+                fraction = (engine.fuel_mass / kg) / total_fuel_kg
+                engine.fuel_mass -= fraction * fuel_mass_lost
         self.payload_mass += payload_mass_gained
 
     def accelerate(self,

@@ -58,6 +58,52 @@ class TestStarship:
         assert self.starship.fuel_mass() / kg < initial_fuel_mass / kg
         assert mass_defect / kg > 0.0
 
+    def test_generate_electricity_multi_engine_equal(self):
+        """Test exact fuel accounting with multiple equal engines."""
+        e1 = Engine(5.0e9 * kg)
+        e2 = Engine(5.0e9 * kg)
+        ship = Starship(50.0 * kg, {'e1': e1, 'e2': e2})
+
+        initial_fuel_total = ship.fuel_mass()
+        energy = ship.electrical_power * (1 * years)
+        ship.generate_electricity(energy)
+
+        fuel_drawn_e1 = 5.0e9 * kg - e1.fuel_mass
+        fuel_drawn_e2 = 5.0e9 * kg - e2.fuel_mass
+
+        assert abs((fuel_drawn_e1 - fuel_drawn_e2) / kg) < 1e-6
+        assert abs(((initial_fuel_total - ship.fuel_mass()) - (fuel_drawn_e1 + fuel_drawn_e2)) / kg) < 1e-6
+
+    def test_generate_electricity_multi_engine_unequal(self):
+        """Test fuel distribution across engines with unequal fuel amounts."""
+        e1 = Engine(1.0e9 * kg)
+        e2 = Engine(9.0e9 * kg)
+        ship = Starship(50.0 * kg, {'e1': e1, 'e2': e2})
+
+        initial_fuel_total = ship.fuel_mass()
+        energy = ship.electrical_power * (1 * years)
+        ship.generate_electricity(energy)
+
+        fuel_drawn_e1 = 1.0e9 * kg - e1.fuel_mass
+        fuel_drawn_e2 = 9.0e9 * kg - e2.fuel_mass
+
+        # e2 had 9x fuel of e1, so fuel drawn from e2 should be 9x fuel drawn from e1
+        assert abs((fuel_drawn_e2 / fuel_drawn_e1) - 9.0) < 1e-5
+        total_drawn = initial_fuel_total - ship.fuel_mass()
+        assert abs((total_drawn - (fuel_drawn_e1 + fuel_drawn_e2)) / kg) < 1e-6
+
+    def test_generate_electricity_one_engine_dry(self):
+        """Test fuel distribution when one engine is completely dry."""
+        e1 = Engine(0.0 * kg)
+        e2 = Engine(1.0e10 * kg)
+        ship = Starship(50.0 * kg, {'e1': e1, 'e2': e2})
+
+        energy = ship.electrical_power * (1 * years)
+        ship.generate_electricity(energy)
+
+        assert e1.fuel_mass == 0.0 * kg
+        assert e2.fuel_mass / kg < 1.0e10
+
 
     @pytest.mark.parametrize('fuel_fraction', [0.1, 0.5, 0.9])
     @pytest.mark.parametrize('direction', [1, -1])
