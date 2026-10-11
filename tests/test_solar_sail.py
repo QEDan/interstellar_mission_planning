@@ -42,3 +42,14 @@ class TestSolarSail:
         assert isinstance(final_velocity / (m / s), float)
         assert abs(final_velocity - 0.012 * c) / (0.012 * c) < 2.0e-2
 
+    def test_gravitational_correction(self):
+        accel_no_grav = self.sail.acceleration(2 * solar_radius, self.payload_mass, include_gravity=False)
+        accel_with_grav = self.sail.acceleration(2 * solar_radius, self.payload_mass, include_gravity=True)
+        assert accel_with_grav / (m / s ** 2) < accel_no_grav / (m / s ** 2)
+
+        v_fin_no_grav = self.sail.final_velocity(self.payload_mass, 2 * solar_radius, include_gravity=False)
+        v_fin_with_grav = self.sail.final_velocity(self.payload_mass, 2 * solar_radius, include_gravity=True)
+        assert v_fin_with_grav / (m / s) < v_fin_no_grav / (m / s)
+
+
+

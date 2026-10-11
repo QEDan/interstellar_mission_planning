@@ -318,3 +318,32 @@ class TestStarship:
 
         assert np.sign(self.starship.velocity / (m / s)
                        - initial_velocity / (m / s)) == accel_direction
+
+    def test_gravitational_escape_velocity_correction(self):
+        """Test that source escape velocity correction requires additional fuel burn"""
+        ship_with_gravity = Starship(self.payload_mass, {'main': Engine(self.fuel_mass)})
+        ship_no_gravity = Starship(self.payload_mass, {'main': Engine(self.fuel_mass)})
+
+        target_v = 0.005 * c
+        ship_with_gravity.accelerate(target_velocity=target_v, include_gravity=True)
+        ship_no_gravity.accelerate(target_velocity=target_v, include_gravity=False)
+
+        assert ship_with_gravity.fuel_mass() / kg < ship_no_gravity.fuel_mass() / kg
+
+    def test_destination_gravitational_deceleration_correction(self):
+        """Test that destination star gravity requires additional braking fuel"""
+        ship_with_gravity = Starship(self.payload_mass, {'main': Engine(self.fuel_mass)})
+        ship_no_gravity = Starship(self.payload_mass, {'main': Engine(self.fuel_mass)})
+
+        initial_v = 0.005 * c
+        ship_with_gravity.velocity = initial_v
+        ship_no_gravity.velocity = initial_v
+        ship_with_gravity.position = ship_with_gravity.destination_distance
+        ship_no_gravity.position = ship_no_gravity.destination_distance
+
+        ship_with_gravity.accelerate(target_velocity=0 * m / s, direction=-1, include_gravity=True)
+        ship_no_gravity.accelerate(target_velocity=0 * m / s, direction=-1, include_gravity=False)
+
+        assert ship_with_gravity.fuel_mass() / kg < ship_no_gravity.fuel_mass() / kg
+
+

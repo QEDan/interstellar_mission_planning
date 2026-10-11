@@ -13,9 +13,11 @@ from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
 from scimath.units.time import years as yr
 
-from src.constants import c, g, mass_3He, mass_2H, mass_p, mass_4He
+from scimath.units.length import astronomical_unit
+from src.constants import c, g, solar_mass, mass_3He, mass_2H, mass_p, mass_4He
 from src.solar_sail import SolarSail
 from src.swimmer import Swimmer
+from src.utils import v_escape
 
 
 class Starship:
@@ -29,7 +31,10 @@ class Starship:
                  destination_distance: unit = 4.244 * ly,
                  electrical_power: unit = 1.5e11 * watt,
                  solar_sail: SolarSail = None,
-                 swimmer: Swimmer = None
+                 swimmer: Swimmer = None,
+                 source_star_mass: unit = solar_mass,
+                 destination_star_mass: unit = solar_mass,
+                 departure_distance: unit = 1 * astronomical_unit
                  ):
         self.payload_mass = payload_mass
         self.engines = engines
@@ -40,6 +45,9 @@ class Starship:
         self.electrical_power = electrical_power
         self.solar_sail = solar_sail
         self.swimmer = swimmer
+        self.source_star_mass = source_star_mass
+        self.destination_star_mass = destination_star_mass
+        self.departure_distance = departure_distance
         self.history = []
         self.log_messages = []
         self.log_entry()
@@ -66,6 +74,18 @@ class Starship:
         """Return the current fuel mass"""
         mass = sum([(e.fuel_mass / kg) for e in self.engines.values()]) * kg
         return mass
+
+    def source_escape_velocity(self, departure_distance: unit = None) -> unit:
+        """Return the escape velocity from the source star."""
+        if departure_distance is None:
+            departure_distance = self.departure_distance
+        return v_escape(departure_distance, self.source_star_mass)
+
+    def destination_escape_velocity(self, distance_from_star: unit = None) -> unit:
+        """Return the escape velocity at the destination star."""
+        if distance_from_star is None:
+            distance_from_star = self.departure_distance
+        return v_escape(distance_from_star, self.destination_star_mass)
 
     def generate_electricity(self,
                              energy_needed: unit,
@@ -95,7 +115,10 @@ class Starship:
                    fuel_mass: unit = None,
                    direction: int = 1,
                    acceleration: unit = g,
-                   generate_electricity: bool = True) -> unit:
+                   generate_electricity: bool = True,
+                   include_gravity: bool = True,
+                   departure_distance: unit = None,
+                   destination_distance_from_star: unit = None) -> unit:
         """Accelerate the ship by burning a specified quantity of fuel.
 
         If no fuel mass is specified, a target_velocity should be specified instead.
@@ -110,30 +133,97 @@ class Starship:
             direction: int
                 If 1, acceleration is in the positive direction
                 If -1, acceleration is in the negative direction
+            acceleration: unit (acceleration)
+                Engine burn acceleration rate
+            generate_electricity: bool
+                Whether to generate electricity during maneuver
+            include_gravity: bool
+                Whether to include gravitational escape velocity corrections
+            departure_distance: unit (distance)
+                Distance from source star for escape velocity calculation
+            destination_distance_from_star: unit (distance)
+                Distance from destination star for escape velocity calculation
 
         Returns:
             unit (speed)
                 New velocity of the starship
         """
+        v_curr_ms = self.velocity / (m / s)
+        target_v_ms = target_velocity / (m / s)
+
+        initial_v_ms = v_curr_ms
         if fuel_mass is not None:
-            delta_v = self.engines[engine_name].burn_fuel(fuel_mass, self.total_mass())
-            delta_t = np.abs(delta_v) / acceleration
-            self.time += delta_t
-            delta_pos = self.velocity * delta_t + direction * 0.5 * acceleration * delta_t ** 2
-            self.velocity += direction * delta_v
-            self.position += delta_pos
+            if v_curr_ms != 0 and np.sign(v_curr_ms) != np.sign(direction):
+                is_decelerating = True
+            else:
+                is_decelerating = False
+        else:
+            is_decelerating = abs(target_v_ms) < abs(v_curr_ms)
+
+        if not is_decelerating:
+            v_esc = self.source_escape_velocity(departure_distance)
+            v_esc_ms = v_esc / (m / s)
+            if fuel_mass is not None:
+                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, self.total_mass())
+                delta_v_burn_ms = delta_v_burn / (m / s)
+                v_gross_ms = abs(v_curr_ms) + delta_v_burn_ms
+                if include_gravity and v_gross_ms >= v_esc_ms:
+                    v_net_ms = np.sqrt(v_gross_ms ** 2 - v_esc_ms ** 2)
+                    self.velocity = direction * v_net_ms * (m / s)
+                else:
+                    self.velocity += direction * delta_v_burn
+                delta_v = delta_v_burn
+            else:
+                v_target_mag = abs(target_v_ms)
+                v_curr_mag = abs(v_curr_ms)
+                if include_gravity:
+                    v_req_mag = np.sqrt(v_target_mag ** 2 + v_esc_ms ** 2)
+                    delta_v_burn_ms = max(0.0, v_req_mag - v_curr_mag)
+                else:
+                    delta_v_burn_ms = abs(v_target_mag - v_curr_mag)
+                delta_v_burn = delta_v_burn_ms * (m / s)
+                self.engines[engine_name].set_target_delta_v(delta_v_burn, self.total_mass())
+                delta_v = delta_v_burn
+                self.velocity = target_velocity
 
         else:
-            self.engines[engine_name].set_target_delta_v(
-                self.velocity - target_velocity, self.total_mass())
-            delta_v = target_velocity - self.velocity
-            delta_t = np.abs(delta_v) / acceleration
-            delta_pos = self.velocity * delta_t + direction * 0.5 * acceleration * delta_t ** 2
-            self.time += delta_t
-            self.velocity = target_velocity
-            self.position += delta_pos
-            if generate_electricity:
-                self.generate_electricity(self.electrical_power * delta_t)
+            v_esc = self.destination_escape_velocity(destination_distance_from_star)
+            v_esc_ms = v_esc / (m / s)
+            if fuel_mass is not None:
+                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, self.total_mass())
+                delta_v_burn_ms = delta_v_burn / (m / s)
+                if include_gravity:
+                    v_inbound_ms = np.sqrt(v_curr_ms ** 2 + v_esc_ms ** 2)
+                    v_rem_ms = max(0.0, v_inbound_ms - delta_v_burn_ms)
+                    self.velocity = direction * v_rem_ms * (m / s)
+                else:
+                    v_rem_ms = max(0.0, abs(v_curr_ms) - delta_v_burn_ms)
+                    self.velocity = direction * v_rem_ms * (m / s)
+                delta_v = delta_v_burn
+            else:
+                v_target_mag = abs(target_v_ms)
+                v_curr_mag = abs(v_curr_ms)
+                if include_gravity:
+                    v_inbound_ms = np.sqrt(v_curr_mag ** 2 + v_esc_ms ** 2)
+                    delta_v_burn_ms = max(0.0, v_inbound_ms - v_target_mag)
+                else:
+                    delta_v_burn_ms = abs(v_curr_mag - v_target_mag)
+                delta_v_burn = delta_v_burn_ms * (m / s)
+                self.engines[engine_name].set_target_delta_v(delta_v_burn, self.total_mass())
+                delta_v = delta_v_burn
+                self.velocity = target_velocity
+
+        final_v_ms = self.velocity / (m / s)
+        accel_ms2 = acceleration / (m / s ** 2)
+        delta_v_ms = delta_v / (m / s)
+        delta_t_s = abs(delta_v_ms) / accel_ms2
+        delta_t = delta_t_s * s
+        self.time += delta_t
+        delta_pos_m = 0.5 * (initial_v_ms + final_v_ms) * delta_t_s
+        self.position += delta_pos_m * m
+        if generate_electricity:
+            self.generate_electricity(self.electrical_power * delta_t)
+
 
         if abs(self.velocity / c) > 0.5:
             raise NotImplementedError(
