@@ -132,5 +132,3 @@ class SolarSail:
             net_v_sq = max(0.0, v_rad_sq - v_esc_sq)
             return np.sqrt(net_v_sq) * (m / s)
         return v_rad
-
-

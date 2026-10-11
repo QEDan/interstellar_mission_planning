@@ -224,7 +224,6 @@ class Starship:
         if generate_electricity:
             self.generate_electricity(self.electrical_power * delta_t)
 
-
         if abs(self.velocity / c) > 0.5:
             raise NotImplementedError(
                 "This ship is travelling at relativistic speeds. This is not currently supported.")

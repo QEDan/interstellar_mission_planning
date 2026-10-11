@@ -4,35 +4,24 @@ on: [push]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
-    - name: Set up Python 3.7
-      uses: actions/setup-python@v1
+    - uses: actions/checkout@v3
+    - name: Set up Miniconda
+      uses: conda-incubator/setup-miniconda@v2
       with:
+        activate-environment: interstellar
+        environment-file: environment.yml
         python-version: 3.9
-    - name: Install Anaconda environment
-      run: |
-        wget https://repo.anaconda.com/archive/Anaconda3-2019.07-Linux-x86_64.sh
-        bash Anaconda3-2019.07-Linux-x86_64.sh -b
-        rm Anaconda3-2019.07-Linux-x86_64.sh
-        export PATH="/home/runner/anaconda3/bin:$PATH"
-        conda update conda
-        conda update anaconda
-        conda update --all
-        CONDA_RESTORE_FREE_CHANNEL=1 conda env create --file=environment.yml
-        conda init bash
+        auto-activate-base: false
     - name: Lint with pylint
+      shell: bash -l {0}
       run: |
-        PYLINT_VER=$(grep pylint environment.yml | cut -d = -f2)
-        pip install pylint==2.9.6
-        export PYTHONPATH=${pwd}
-        pylint **/*.py
+        export PYTHONPATH=$(pwd)
+        pylint src tests
     - name: Lint with flake8
+      shell: bash -l {0}
       run: |
-        FLAKE8_VER=$(grep flake8 environment.yml | cut -d = -f2)
-        pip install flake8==${FLAKE8_VER}
-        export PYTHONPATH=${pwd}
+        export PYTHONPATH=$(pwd)
         flake8 --count --statistics

@@ -24,4 +24,3 @@ def effective_delta_v_with_gravity(target_velocity: unit,
     """Effective delta-v required to achieve target velocity accounting for gravity."""
     v_esc = v_escape(distance, star_mass)
     return (target_velocity ** 2 + v_esc ** 2) ** 0.5
-
