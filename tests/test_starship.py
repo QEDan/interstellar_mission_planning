@@ -52,11 +52,12 @@ class TestStarship:
         initial_payload_mass = self.starship.payload_mass
         initial_fuel_mass = self.starship.fuel_mass()
         self.starship.generate_electricity(total_energy)
-        mass_defect = (initial_fuel_mass + initial_payload_mass) - \
-                      (self.starship.payload_mass + self.starship.fuel_mass())
-        assert self.starship.payload_mass / kg > initial_payload_mass / kg
+        total_mass_lost = (initial_fuel_mass + initial_payload_mass) - \
+                          (self.starship.payload_mass + self.starship.fuel_mass())
+        assert self.starship.payload_mass / kg == initial_payload_mass / kg
         assert self.starship.fuel_mass() / kg < initial_fuel_mass / kg
-        assert mass_defect / kg > 0.0
+        assert total_mass_lost / kg > 0.0
+
 
     def test_generate_electricity_multi_engine_equal(self):
         """Test exact fuel accounting with multiple equal engines."""

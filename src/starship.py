@@ -7,14 +7,14 @@ from scimath.units.unit import unit
 from scimath.units.SI import watt
 from scimath.units.energy import MeV
 from scimath.units.length import kilometers as km
+from scimath.units.length import astronomical_unit
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.time import seconds as s
 from scimath.units.time import years as yr
 
-from scimath.units.length import astronomical_unit
-from src.constants import c, g, solar_mass, mass_3He, mass_2H, mass_p, mass_4He
+from src.constants import c, g, solar_mass, mass_3He, mass_2H
 from src.solar_sail import SolarSail
 from src.swimmer import Swimmer
 from src.utils import v_escape
@@ -93,7 +93,9 @@ class Starship:
         """Assume the engines will be used for electricity generation rather than propulsion
         to adjust masses.
 
-        This calculation currently assumes the main reaction is 3He + 2H -> p + 4He.
+        This calculation assumes the main reaction is 3He + 2H -> p + 4He.
+        Fuel is consumed from engine tanks to generate the required electrical energy accounting
+        for conversion efficiency. Products and waste energy are exhausted into space.
         """
         energy_fusion = 18.354 * MeV
         num_reactions = energy_needed / (efficiency * energy_fusion)
@@ -101,13 +103,11 @@ class Starship:
         if self.fuel_mass() / kg < fuel_mass_lost / kg:
             raise ValueError(f"Cannot generate {energy_needed} of electricity with "
                              f"only {self.fuel_mass()} of fuel.")
-        payload_mass_gained = num_reactions * (mass_p + mass_4He)
         total_fuel_kg = self.fuel_mass() / kg
         if total_fuel_kg > 0:
             for engine in self.engines.values():
                 fraction = (engine.fuel_mass / kg) / total_fuel_kg
                 engine.fuel_mass -= fraction * fuel_mass_lost
-        self.payload_mass += payload_mass_gained
 
     def accelerate(self,
                    engine_name: str = 'main',
