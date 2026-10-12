@@ -1,3 +1,4 @@
+"""Utility functions for orbital mechanics and stellar calculations."""
 from scimath.units.unit import unit
 from src.constants import G, solar_mass
 
