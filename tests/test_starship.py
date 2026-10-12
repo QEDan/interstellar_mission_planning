@@ -11,7 +11,7 @@ from scimath.units.time import seconds as s, years
 
 
 from src import SolarSail, Engine, Starship, Swimmer
-from src.constants import c, year
+from src.constants import c, year, solar_mass
 
 
 class TestStarship:
@@ -360,6 +360,58 @@ class TestStarship:
         ship.position = ship.destination_distance + 0.1 * astronomical_unit
         ship.sail(target_velocity=None, position_of_star=ship.destination_distance)
         assert ship.time / s > 0
+
+    def test_keyword_only_arguments_enforcement(self):
+        """Test that methods require keyword arguments for optional configuration parameters"""
+        # Starship.__init__ requires kwargs after payload_mass, engines
+        with pytest.raises(TypeError):
+            Starship(self.payload_mass, {'main': Engine(self.fuel_mass)}, 100 * m / s)  # pylint: disable=too-many-positional-arguments
+
+        # Starship.accelerate requires kwargs after engine_name, target_velocity
+        with pytest.raises(TypeError):
+            self.starship.accelerate('main', 100 * m / s, 1000 * kg)  # pylint: disable=too-many-positional-arguments
+
+        # Starship.sail requires kwargs after target_velocity
+        with pytest.raises(TypeError):
+            self.starship.sail(0.0 * m / s, 0.0 * m)  # pylint: disable=too-many-positional-arguments
+
+    def test_resolve_star_properties(self):
+        """Test helper resolving stellar mass and luminosity for origin and destination"""
+        dest_mass = 2.0 * solar_mass
+        dest_lum = 5.0e26 * watt
+        ship = Starship(self.payload_mass,
+                        {'main': Engine(self.fuel_mass)},
+                        destination_star_mass=dest_mass,
+                        destination_stellar_luminosity=dest_lum)
+
+        # Source star (origin)
+        m_src, l_src = ship._resolve_star_properties(0.0 * m, None, None)  # pylint: disable=protected-access
+        assert m_src == ship.source_star_mass
+        assert l_src == ship.source_stellar_luminosity
+
+        # Destination star
+        m_dest, l_dest = ship._resolve_star_properties(  # pylint: disable=protected-access
+            ship.destination_distance, None, None)
+        assert m_dest == dest_mass
+        assert l_dest == dest_lum
+
+        # Explicit overrides
+        custom_mass = 0.5 * solar_mass
+        custom_lum = 1.0e25 * watt
+        m_custom, l_custom = ship._resolve_star_properties(  # pylint: disable=protected-access
+            0.0 * m, custom_mass, custom_lum)
+        assert m_custom == custom_mass
+        assert l_custom == custom_lum
+
+    def test_fuel_mass_generator(self):
+        """Test fuel_mass correctly calculates sum with generator expression"""
+        ship = Starship(self.payload_mass, {
+            'e1': Engine(100.0 * kg),
+            'e2': Engine(250.0 * kg),
+            'e3': Engine(50.0 * kg)
+        })
+        assert float(ship.fuel_mass() / kg) == pytest.approx(400.0)
+
 
 
 

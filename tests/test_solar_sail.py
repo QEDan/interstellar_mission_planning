@@ -1,3 +1,4 @@
+import pytest
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
 from scimath.units.power import watt
@@ -60,6 +61,21 @@ class TestSolarSail:
                                                stellar_luminosity=proxima_luminosity)
         assert accel_proxima / (m / s ** 2) < accel_sun / (m / s ** 2)
         assert abs((accel_proxima / accel_sun) - (6.5e23 / 3.83e26)) < 1.0e-4
+
+    def test_keyword_only_arguments_enforcement(self):
+        """Test that methods require keyword arguments for optional configuration parameters"""
+        # SolarSail.__init__ requires kwargs after sail_mass, sail_radius
+        with pytest.raises(TypeError):
+            SolarSail(self.sail_mass, self.sail_radius, 0.95)  # pylint: disable=too-many-positional-arguments
+
+        # SolarSail.acceleration requires kwargs after relative_position_from_star, payload_mass
+        with pytest.raises(TypeError):
+            self.sail.acceleration(2 * solar_radius, self.payload_mass, 0.01 * g)  # pylint: disable=too-many-positional-arguments
+
+        # SolarSail.final_velocity requires kwargs after payload_mass, initial_distance_from_star
+        with pytest.raises(TypeError):
+            self.sail.final_velocity(self.payload_mass, 2 * solar_radius, 1.0 * kg)  # pylint: disable=too-many-positional-arguments
+
 
 
 

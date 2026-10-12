@@ -18,6 +18,7 @@ class SolarSail:
     def __init__(self,
                  sail_mass: unit,
                  sail_radius: unit,
+                 *,
                  reflectivity: float = 0.9,
                  stellar_luminosity: unit = 3.83e26 * watt,
                  star_mass: unit = solar_mass
@@ -63,6 +64,7 @@ class SolarSail:
     def acceleration(self,
                      relative_position_from_star: unit,
                      payload_mass: unit,
+                     *,
                      max_accel: Optional[unit] = None,
                      star_mass: Optional[unit] = None,
                      stellar_luminosity: Optional[unit] = None,
@@ -109,6 +111,7 @@ class SolarSail:
     def final_velocity(self,
                        payload_mass: unit,
                        initial_distance_from_star: unit,
+                       *,
                        star_mass: Optional[unit] = None,
                        stellar_luminosity: Optional[unit] = None,
                        include_gravity: bool = False) -> unit:

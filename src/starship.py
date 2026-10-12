@@ -1,6 +1,6 @@
 """Starship class"""
 
-from typing import Optional
+from typing import Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.integrate
@@ -27,6 +27,7 @@ class Starship:
     def __init__(self,
                  payload_mass,
                  engines: dict,
+                 *,
                  initial_velocity: unit = 0 * m / s,
                  initial_position: unit = 0 * km,
                  initial_time: unit = 0 * s,
@@ -79,7 +80,7 @@ class Starship:
 
     def fuel_mass(self):
         """Return the current fuel mass"""
-        mass = sum([(e.fuel_mass / kg) for e in self.engines.values()]) * kg
+        mass = sum(e.fuel_mass / kg for e in self.engines.values()) * kg
         return mass
 
     def source_escape_velocity(self, departure_distance: unit = None) -> unit:
@@ -116,9 +117,87 @@ class Starship:
                 fraction = (engine.fuel_mass / kg) / total_fuel_kg
                 engine.fuel_mass -= fraction * fuel_mass_lost
 
+    def _burn_acceleration(self,
+                           engine_name: str,
+                           target_velocity: unit,
+                           *,
+                           fuel_mass: Optional[unit],
+                           direction: int,
+                           include_gravity: bool,
+                           departure_distance: Optional[unit]) -> unit:
+        """Execute engine burn for acceleration phase."""
+        v_curr_ms = self.velocity / (m / s)
+        target_v_ms = target_velocity / (m / s)
+        v_esc = self.source_escape_velocity(departure_distance)
+        v_esc_ms = v_esc / (m / s)
+        ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
+
+        if fuel_mass is not None:
+            delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
+            delta_v_burn_ms = delta_v_burn / (m / s)
+            v_gross_ms = abs(v_curr_ms) + delta_v_burn_ms
+            if include_gravity and v_gross_ms >= v_esc_ms:
+                v_net_ms = np.sqrt(v_gross_ms ** 2 - v_esc_ms ** 2)
+                self.velocity = direction * v_net_ms * (m / s)
+            else:
+                self.velocity += direction * delta_v_burn
+            return delta_v_burn
+
+        v_target_mag = abs(target_v_ms)
+        v_curr_mag = abs(v_curr_ms)
+        if include_gravity:
+            v_req_mag = np.sqrt(v_target_mag ** 2 + v_esc_ms ** 2)
+            delta_v_burn_ms = max(0.0, v_req_mag - v_curr_mag)
+        else:
+            delta_v_burn_ms = abs(v_target_mag - v_curr_mag)
+        delta_v_burn = delta_v_burn_ms * (m / s)
+        self.engines[engine_name].set_target_delta_v(delta_v_burn, ship_dry_mass)
+        self.velocity = target_velocity
+        return delta_v_burn
+
+    def _burn_deceleration(self,
+                           engine_name: str,
+                           target_velocity: unit,
+                           *,
+                           fuel_mass: Optional[unit],
+                           direction: int,
+                           include_gravity: bool,
+                           destination_distance_from_star: Optional[unit]) -> unit:
+        """Execute engine burn for deceleration phase."""
+        v_curr_ms = self.velocity / (m / s)
+        target_v_ms = target_velocity / (m / s)
+        v_esc = self.destination_escape_velocity(destination_distance_from_star)
+        v_esc_ms = v_esc / (m / s)
+        ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
+
+        if fuel_mass is not None:
+            delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
+            delta_v_burn_ms = delta_v_burn / (m / s)
+            if include_gravity:
+                v_inbound_ms = np.sqrt(v_curr_ms ** 2 + v_esc_ms ** 2)
+                v_rem_ms = max(0.0, v_inbound_ms - delta_v_burn_ms)
+                self.velocity = direction * v_rem_ms * (m / s)
+            else:
+                v_rem_ms = max(0.0, abs(v_curr_ms) - delta_v_burn_ms)
+                self.velocity = direction * v_rem_ms * (m / s)
+            return delta_v_burn
+
+        v_target_mag = abs(target_v_ms)
+        v_curr_mag = abs(v_curr_ms)
+        if include_gravity:
+            v_inbound_ms = np.sqrt(v_curr_mag ** 2 + v_esc_ms ** 2)
+            delta_v_burn_ms = max(0.0, v_inbound_ms - v_target_mag)
+        else:
+            delta_v_burn_ms = abs(v_curr_mag - v_target_mag)
+        delta_v_burn = delta_v_burn_ms * (m / s)
+        self.engines[engine_name].set_target_delta_v(delta_v_burn, ship_dry_mass)
+        self.velocity = target_velocity
+        return delta_v_burn
+
     def accelerate(self,
                    engine_name: str = 'main',
                    target_velocity: unit = 0 * km / s,
+                   *,
                    fuel_mass: unit = None,
                    direction: int = 1,
                    acceleration: unit = g,
@@ -160,67 +239,24 @@ class Starship:
 
         initial_v_ms = v_curr_ms
         if fuel_mass is not None:
-            if v_curr_ms != 0 and np.sign(v_curr_ms) != np.sign(direction):
-                is_decelerating = True
-            else:
-                is_decelerating = False
+            is_decelerating = bool(v_curr_ms != 0 and np.sign(v_curr_ms) != np.sign(direction))
         else:
             is_decelerating = abs(target_v_ms) < abs(v_curr_ms)
 
         if not is_decelerating:
-            v_esc = self.source_escape_velocity(departure_distance)
-            v_esc_ms = v_esc / (m / s)
-            ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
-            if fuel_mass is not None:
-                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
-                delta_v_burn_ms = delta_v_burn / (m / s)
-                v_gross_ms = abs(v_curr_ms) + delta_v_burn_ms
-                if include_gravity and v_gross_ms >= v_esc_ms:
-                    v_net_ms = np.sqrt(v_gross_ms ** 2 - v_esc_ms ** 2)
-                    self.velocity = direction * v_net_ms * (m / s)
-                else:
-                    self.velocity += direction * delta_v_burn
-                delta_v = delta_v_burn
-            else:
-                v_target_mag = abs(target_v_ms)
-                v_curr_mag = abs(v_curr_ms)
-                if include_gravity:
-                    v_req_mag = np.sqrt(v_target_mag ** 2 + v_esc_ms ** 2)
-                    delta_v_burn_ms = max(0.0, v_req_mag - v_curr_mag)
-                else:
-                    delta_v_burn_ms = abs(v_target_mag - v_curr_mag)
-                delta_v_burn = delta_v_burn_ms * (m / s)
-                self.engines[engine_name].set_target_delta_v(delta_v_burn, ship_dry_mass)
-                delta_v = delta_v_burn
-                self.velocity = target_velocity
-
+            delta_v = self._burn_acceleration(
+                engine_name, target_velocity,
+                fuel_mass=fuel_mass,
+                direction=direction,
+                include_gravity=include_gravity,
+                departure_distance=departure_distance)
         else:
-            v_esc = self.destination_escape_velocity(destination_distance_from_star)
-            v_esc_ms = v_esc / (m / s)
-            ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
-            if fuel_mass is not None:
-                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
-                delta_v_burn_ms = delta_v_burn / (m / s)
-                if include_gravity:
-                    v_inbound_ms = np.sqrt(v_curr_ms ** 2 + v_esc_ms ** 2)
-                    v_rem_ms = max(0.0, v_inbound_ms - delta_v_burn_ms)
-                    self.velocity = direction * v_rem_ms * (m / s)
-                else:
-                    v_rem_ms = max(0.0, abs(v_curr_ms) - delta_v_burn_ms)
-                    self.velocity = direction * v_rem_ms * (m / s)
-                delta_v = delta_v_burn
-            else:
-                v_target_mag = abs(target_v_ms)
-                v_curr_mag = abs(v_curr_ms)
-                if include_gravity:
-                    v_inbound_ms = np.sqrt(v_curr_mag ** 2 + v_esc_ms ** 2)
-                    delta_v_burn_ms = max(0.0, v_inbound_ms - v_target_mag)
-                else:
-                    delta_v_burn_ms = abs(v_curr_mag - v_target_mag)
-                delta_v_burn = delta_v_burn_ms * (m / s)
-                self.engines[engine_name].set_target_delta_v(delta_v_burn, ship_dry_mass)
-                delta_v = delta_v_burn
-                self.velocity = target_velocity
+            delta_v = self._burn_deceleration(
+                engine_name, target_velocity,
+                fuel_mass=fuel_mass,
+                direction=direction,
+                include_gravity=include_gravity,
+                destination_distance_from_star=destination_distance_from_star)
 
         final_v_ms = self.velocity / (m / s)
         accel_ms2 = acceleration / (m / s ** 2)
@@ -272,46 +308,34 @@ class Starship:
             f"year {(self.time - time) / yr:0.1f} - Waited: {time / yr:0.2e} years. "
             f"Distance={distance / ly:0.2e} lightyears")
 
-    def sail(self,
-             target_velocity: unit,
-             position_of_star: unit = 0.0 * m,
-             max_accel: unit = None,
-             max_sail_time: unit = 14 * 24 * 3600 * s,
-             generate_electricity: bool = True,
-             include_gravity: bool = False,
-             star_mass: Optional[unit] = None,
-             stellar_luminosity: Optional[unit] = None):
-        """Accelerate or decelerate using solar sails."""
-        if self.solar_sail is None:
-            raise RuntimeError("This starship has no solar sail. Cannot sail.")
-
+    def _resolve_star_properties(self,
+                                 position_of_star: unit,
+                                 star_mass: Optional[unit],
+                                 stellar_luminosity: Optional[unit]) -> Tuple[unit, unit]:
+        """Resolve mass and luminosity for source or destination star."""
         is_destination = abs((position_of_star - self.destination_distance) / m) < 1e3
         if star_mass is None:
-            star_mass = self.destination_star_mass if is_destination else self.source_star_mass
+            resolved_mass = self.destination_star_mass if is_destination else self.source_star_mass
+        else:
+            resolved_mass = star_mass
+
         if stellar_luminosity is None:
-            luminosity = self.destination_stellar_luminosity if is_destination \
+            resolved_luminosity = self.destination_stellar_luminosity if is_destination \
                 else self.source_stellar_luminosity
         else:
-            luminosity = stellar_luminosity
+            resolved_luminosity = stellar_luminosity
 
-        relative_position_to_star = self.position - position_of_star
-        max_velocity = self.solar_sail.final_velocity(
-            self.total_mass() - self.solar_sail.sail_mass,
-            relative_position_to_star,
-            star_mass=star_mass,
-            stellar_luminosity=luminosity,
-            include_gravity=include_gravity)
-        if target_velocity is None:
-            if np.sign(relative_position_to_star / m) == -1 * np.sign(self.velocity / c):
-                # Deceleration scenario
-                target_velocity = 0.0 * m / s
-            else:
-                target_velocity = 0.90 * max_velocity * np.sign(relative_position_to_star / m)
-        if abs(target_velocity / c) > abs(max_velocity / c):
-            raise ValueError(f"Unable to achieve velocity {target_velocity / c}c "
-                             f"through sailing. Maximum achievable velocity"
-                             f" is {max_velocity / c}c.")
+        return resolved_mass, resolved_luminosity
 
+    def _integrate_sail(self,
+                        relative_position_to_star: unit,
+                        *,
+                        max_sail_time: unit,
+                        max_accel: Optional[unit],
+                        star_mass: unit,
+                        stellar_luminosity: unit,
+                        include_gravity: bool):
+        """Solve ODE trajectory for solar sailing."""
         def integrand(_, pos_vel):
             pos, vel = pos_vel[0], pos_vel[1]
             if np.isnan(pos) or np.isnan(vel):
@@ -321,7 +345,7 @@ class Starship:
                 self.total_mass(),
                 max_accel=max_accel,
                 star_mass=star_mass,
-                stellar_luminosity=luminosity,
+                stellar_luminosity=stellar_luminosity,
                 include_gravity=include_gravity
             ) / (m / s ** 2)
             derivative = np.array([
@@ -331,13 +355,22 @@ class Starship:
             return derivative
 
         initial_velocity = self.velocity
-        y_soln = scipy.integrate.solve_ivp(
-
+        return scipy.integrate.solve_ivp(
             integrand,
             [0, max_sail_time / s],
             [relative_position_to_star / m, initial_velocity / (m / s)]
         )
-        initial_position = self.position
+
+    def _apply_sailing_trajectory(self,
+                                  y_soln,
+                                  *,
+                                  initial_position: unit,
+                                  relative_position_to_star: unit,
+                                  target_velocity: unit,
+                                  max_velocity: unit,
+                                  generate_electricity: bool):
+        """Step through the sailing trajectory solution and update ship state."""
+        sailing_time = 0.0 * s
         for i in range(1, len(y_soln.t)):
             delta_t = (y_soln.t[i] - y_soln.t[i - 1]) * s
             self.time += delta_t
@@ -361,14 +394,70 @@ class Starship:
                 break
             if generate_electricity:
                 self.generate_electricity(self.electrical_power * delta_t)
+
         if target_velocity / (m / s) == 0.0:
             self.velocity = 0.0 * m / s
+
         self.log_entry(
             f"year {(self.time) / yr:0.1f} - Finished sailing. velocity "
             f"{self.velocity / (m / s)} m/s. Traveling at "
             f"{self.velocity / max_velocity * 100:0.1f}% of maximum sail velocity. "
             f"Sailing time was "
             f"{sailing_time / (24 * 3600 * s)} days."
+        )
+
+    def sail(self,
+             target_velocity: Optional[unit] = None,
+             *,
+             position_of_star: unit = 0.0 * m,
+             max_accel: Optional[unit] = None,
+             max_sail_time: unit = 14 * 24 * 3600 * s,
+             generate_electricity: bool = True,
+             include_gravity: bool = False,
+             star_mass: Optional[unit] = None,
+             stellar_luminosity: Optional[unit] = None):
+        """Accelerate or decelerate using solar sails."""
+        if self.solar_sail is None:
+            raise RuntimeError("This starship has no solar sail. Cannot sail.")
+
+        resolved_star_mass, luminosity = self._resolve_star_properties(
+            position_of_star, star_mass, stellar_luminosity)
+
+        relative_position_to_star = self.position - position_of_star
+        max_velocity = self.solar_sail.final_velocity(
+            self.total_mass() - self.solar_sail.sail_mass,
+            relative_position_to_star,
+            star_mass=resolved_star_mass,
+            stellar_luminosity=luminosity,
+            include_gravity=include_gravity)
+        if target_velocity is None:
+            if np.sign(relative_position_to_star / m) == -1 * np.sign(self.velocity / c):
+                # Deceleration scenario
+                target_velocity = 0.0 * m / s
+            else:
+                target_velocity = 0.90 * max_velocity * np.sign(relative_position_to_star / m)
+        if abs(target_velocity / c) > abs(max_velocity / c):
+            raise ValueError(f"Unable to achieve velocity {target_velocity / c}c "
+                             f"through sailing. Maximum achievable velocity"
+                             f" is {max_velocity / c}c.")
+
+        initial_position = self.position
+        y_soln = self._integrate_sail(
+            relative_position_to_star,
+            max_sail_time=max_sail_time,
+            max_accel=max_accel,
+            star_mass=resolved_star_mass,
+            stellar_luminosity=luminosity,
+            include_gravity=include_gravity
+        )
+
+        self._apply_sailing_trajectory(
+            y_soln,
+            initial_position=initial_position,
+            relative_position_to_star=relative_position_to_star,
+            target_velocity=target_velocity,
+            max_velocity=max_velocity,
+            generate_electricity=generate_electricity
         )
 
     def swim(self,
