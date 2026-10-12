@@ -163,8 +163,9 @@ class Starship:
         if not is_decelerating:
             v_esc = self.source_escape_velocity(departure_distance)
             v_esc_ms = v_esc / (m / s)
+            ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
             if fuel_mass is not None:
-                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, self.total_mass())
+                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
                 delta_v_burn_ms = delta_v_burn / (m / s)
                 v_gross_ms = abs(v_curr_ms) + delta_v_burn_ms
                 if include_gravity and v_gross_ms >= v_esc_ms:
@@ -182,15 +183,16 @@ class Starship:
                 else:
                     delta_v_burn_ms = abs(v_target_mag - v_curr_mag)
                 delta_v_burn = delta_v_burn_ms * (m / s)
-                self.engines[engine_name].set_target_delta_v(delta_v_burn, self.total_mass())
+                self.engines[engine_name].set_target_delta_v(delta_v_burn, ship_dry_mass)
                 delta_v = delta_v_burn
                 self.velocity = target_velocity
 
         else:
             v_esc = self.destination_escape_velocity(destination_distance_from_star)
             v_esc_ms = v_esc / (m / s)
+            ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
             if fuel_mass is not None:
-                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, self.total_mass())
+                delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
                 delta_v_burn_ms = delta_v_burn / (m / s)
                 if include_gravity:
                     v_inbound_ms = np.sqrt(v_curr_ms ** 2 + v_esc_ms ** 2)
@@ -209,7 +211,7 @@ class Starship:
                 else:
                     delta_v_burn_ms = abs(v_curr_mag - v_target_mag)
                 delta_v_burn = delta_v_burn_ms * (m / s)
-                self.engines[engine_name].set_target_delta_v(delta_v_burn, self.total_mass())
+                self.engines[engine_name].set_target_delta_v(delta_v_burn, ship_dry_mass)
                 delta_v = delta_v_burn
                 self.velocity = target_velocity
 
