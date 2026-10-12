@@ -6,7 +6,9 @@ from scimath.units.length import kilometers as km, astronomical_unit
 from scimath.units.length import light_year as ly
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
+from scimath.units.power import watt
 from scimath.units.time import seconds as s, years
+
 
 from src import SolarSail, Engine, Starship, Swimmer
 from src.constants import c, year
@@ -346,5 +348,19 @@ class TestStarship:
         ship_no_gravity.accelerate(target_velocity=0 * m / s, direction=-1, include_gravity=False)
 
         assert ship_with_gravity.fuel_mass() / kg < ship_no_gravity.fuel_mass() / kg
+
+    def test_sail_destination_star(self):
+        """Test that sailing at destination star uses destination stellar properties"""
+        proxima_luminosity = 6.5e23 * watt
+        sail = SolarSail(0.1 * kg, 1000.0 * m)
+        ship = Starship(self.payload_mass,
+                        {'main': Engine(self.fuel_mass)},
+                        solar_sail=sail,
+                        destination_stellar_luminosity=proxima_luminosity)
+        ship.position = ship.destination_distance + 0.1 * astronomical_unit
+        ship.sail(target_velocity=None, position_of_star=ship.destination_distance)
+        assert ship.time / s > 0
+
+
 
 

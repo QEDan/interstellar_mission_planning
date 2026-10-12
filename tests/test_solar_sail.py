@@ -1,5 +1,6 @@
 from scimath.units.length import meters as m
 from scimath.units.mass import kilograms as kg
+from scimath.units.power import watt
 from scimath.units.time import seconds as s
 
 from src import SolarSail
@@ -50,6 +51,16 @@ class TestSolarSail:
         v_fin_no_grav = self.sail.final_velocity(self.payload_mass, 2 * solar_radius, include_gravity=False)
         v_fin_with_grav = self.sail.final_velocity(self.payload_mass, 2 * solar_radius, include_gravity=True)
         assert v_fin_with_grav / (m / s) < v_fin_no_grav / (m / s)
+
+    def test_destination_stellar_luminosity(self):
+        proxima_luminosity = 6.5e23 * watt
+        accel_sun = self.sail.acceleration(2 * solar_radius, self.payload_mass)
+        accel_proxima = self.sail.acceleration(2 * solar_radius,
+                                               self.payload_mass,
+                                               stellar_luminosity=proxima_luminosity)
+        assert accel_proxima / (m / s ** 2) < accel_sun / (m / s ** 2)
+        assert abs((accel_proxima / accel_sun) - (6.5e23 / 3.83e26)) < 1.0e-4
+
 
 
 

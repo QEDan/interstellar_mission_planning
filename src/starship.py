@@ -1,8 +1,10 @@
 """Starship class"""
 
+from typing import Optional
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.integrate
+
 from scimath.units.unit import unit
 from scimath.units.SI import watt
 from scimath.units.energy import MeV
@@ -34,6 +36,8 @@ class Starship:
                  swimmer: Swimmer = None,
                  source_star_mass: unit = solar_mass,
                  destination_star_mass: unit = solar_mass,
+                 source_stellar_luminosity: unit = 3.83e26 * watt,
+                 destination_stellar_luminosity: unit = 3.83e26 * watt,
                  departure_distance: unit = 1 * astronomical_unit
                  ):
         self.payload_mass = payload_mass
@@ -47,6 +51,8 @@ class Starship:
         self.swimmer = swimmer
         self.source_star_mass = source_star_mass
         self.destination_star_mass = destination_star_mass
+        self.source_stellar_luminosity = source_stellar_luminosity
+        self.destination_stellar_luminosity = destination_stellar_luminosity
         self.departure_distance = departure_distance
         self.history = []
         self.log_messages = []
@@ -54,6 +60,7 @@ class Starship:
 
     def log_entry(self, message: str = ''):
         """Enter current data into the log"""
+
         new_log = {'time': self.time,
                    'position': self.position,
                    'velocity': self.velocity,
@@ -270,14 +277,30 @@ class Starship:
              position_of_star: unit = 0.0 * m,
              max_accel: unit = None,
              max_sail_time: unit = 14 * 24 * 3600 * s,
-             generate_electricity: bool = True):
+             generate_electricity: bool = True,
+             include_gravity: bool = False,
+             star_mass: Optional[unit] = None,
+             stellar_luminosity: Optional[unit] = None):
         """Accelerate or decelerate using solar sails."""
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
+
+        is_destination = abs((position_of_star - self.destination_distance) / m) < 1e3
+        if star_mass is None:
+            star_mass = self.destination_star_mass if is_destination else self.source_star_mass
+        if stellar_luminosity is None:
+            luminosity = self.destination_stellar_luminosity if is_destination \
+                else self.source_stellar_luminosity
+        else:
+            luminosity = stellar_luminosity
+
         relative_position_to_star = self.position - position_of_star
         max_velocity = self.solar_sail.final_velocity(
             self.total_mass() - self.solar_sail.sail_mass,
-            relative_position_to_star)
+            relative_position_to_star,
+            star_mass=star_mass,
+            stellar_luminosity=luminosity,
+            include_gravity=include_gravity)
         if target_velocity is None:
             if np.sign(relative_position_to_star / m) == -1 * np.sign(self.velocity / c):
                 # Deceleration scenario
@@ -296,7 +319,10 @@ class Starship:
             accel = self.solar_sail.acceleration(
                 pos * m,
                 self.total_mass(),
-                max_accel=max_accel
+                max_accel=max_accel,
+                star_mass=star_mass,
+                stellar_luminosity=luminosity,
+                include_gravity=include_gravity
             ) / (m / s ** 2)
             derivative = np.array([
                 vel,
@@ -306,6 +332,7 @@ class Starship:
 
         initial_velocity = self.velocity
         y_soln = scipy.integrate.solve_ivp(
+
             integrand,
             [0, max_sail_time / s],
             [relative_position_to_star / m, initial_velocity / (m / s)]

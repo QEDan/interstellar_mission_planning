@@ -28,14 +28,18 @@ class SolarSail:
         self.stellar_luminosity = stellar_luminosity
         self.star_mass = star_mass
 
-    def radiation_pressure_1au(self) -> unit:
+    def radiation_pressure_1au(self,
+                               stellar_luminosity: Optional[unit] = None) -> unit:
         """The radiation pressure at one astronomical unit"""
-        pressure = (1 + self.reflectivity) * self.stellar_luminosity / \
+        if stellar_luminosity is None:
+            stellar_luminosity = self.stellar_luminosity
+        pressure = (1 + self.reflectivity) * stellar_luminosity / \
                    (4 * np.pi * astronomical_unit ** 2 * c)
         return pressure
 
     def characteristic_acceleration(self,
-                                    payload_mass: unit) -> unit:
+                                    payload_mass: unit,
+                                    stellar_luminosity: Optional[unit] = None) -> unit:
         """The characteristic acceleration of the sail
 
         See: Spieth&Zubrin, Ultra-Thin Solar Sails for Interstellar Travel, 1999
@@ -44,22 +48,24 @@ class SolarSail:
         Args
             payload_mass (mass)
                 Mass of the sail's payload
+            stellar_luminosity (power)
+                Luminosity of the star. Defaults to self.stellar_luminosity.
 
         Returns
             (acceleration)
                 The characterisitic acceleration of the sail
         """
         total_mass = self.sail_mass + payload_mass
-        characteristic_accel = self.reflectivity * self.radiation_pressure_1au() * \
-            np.pi * self.sail_radius ** 2 \
-            / total_mass
-        return characteristic_accel
+        rad_p = self.radiation_pressure_1au(stellar_luminosity)
+        accel = self.reflectivity * rad_p * np.pi * self.sail_radius ** 2 / total_mass
+        return accel
 
     def acceleration(self,
                      relative_position_from_star: unit,
                      payload_mass: unit,
                      max_accel: Optional[unit] = None,
                      star_mass: Optional[unit] = None,
+                     stellar_luminosity: Optional[unit] = None,
                      include_gravity: bool = False) -> unit:
         """Returns the acceleration of the sailing starcraft.
 
@@ -75,6 +81,8 @@ class SolarSail:
                 partly furled to limit the acceleration.
             star_mass (mass)
                 Mass of the star. Defaults to self.star_mass.
+            stellar_luminosity (power)
+                Luminosity of the star. Defaults to self.stellar_luminosity.
             include_gravity (bool)
                 Whether to subtract stellar gravitational acceleration.
         Returns
@@ -83,8 +91,10 @@ class SolarSail:
         """
         if star_mass is None:
             star_mass = self.star_mass
+        if stellar_luminosity is None:
+            stellar_luminosity = self.stellar_luminosity
         total_mass = self.sail_mass + payload_mass
-        rad_accel = (1 + self.reflectivity) * self.stellar_luminosity * self.sail_radius ** 2 \
+        rad_accel = (1 + self.reflectivity) * stellar_luminosity * self.sail_radius ** 2 \
             / (4 * c * total_mass * relative_position_from_star ** 2)
         if include_gravity:
             grav_accel = G * star_mass / (relative_position_from_star ** 2)
@@ -100,6 +110,7 @@ class SolarSail:
                        payload_mass: unit,
                        initial_distance_from_star: unit,
                        star_mass: Optional[unit] = None,
+                       stellar_luminosity: Optional[unit] = None,
                        include_gravity: bool = False) -> unit:
         """Expected final velocity assuming starting from rest.
 
@@ -114,6 +125,8 @@ class SolarSail:
                 Initial distance from the star
             star_mass (mass)
                 Mass of the star. Defaults to self.star_mass.
+            stellar_luminosity (power)
+                Luminosity of the star. Defaults to self.stellar_luminosity.
             include_gravity (bool)
                 Whether to subtract stellar escape velocity.
         Returns
@@ -122,9 +135,13 @@ class SolarSail:
         """
         if star_mass is None:
             star_mass = self.star_mass
+        dist = abs(initial_distance_from_star / astronomical_unit)
+        if dist == 0:
+            dist = 1.0
         v_rad = (548000 * m / s) * np.sqrt(
-            self.characteristic_acceleration(payload_mass) / (m / s ** 2)
-            / abs(initial_distance_from_star / astronomical_unit))
+            self.characteristic_acceleration(payload_mass, stellar_luminosity) / (m / s ** 2)
+            / dist)
+
         if include_gravity:
             v_esc = v_escape(abs(initial_distance_from_star), star_mass)
             v_rad_sq = (v_rad / (m / s)) ** 2
