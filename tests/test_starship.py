@@ -10,7 +10,7 @@ from scimath.units.power import watt
 from scimath.units.time import seconds as s, years
 
 
-from src import SolarSail, Engine, Starship, Swimmer
+from src import SolarSail, Engine, Starship, Swimmer, NumericalIntegrationError
 from src.constants import c, year, solar_mass
 
 
@@ -412,7 +412,90 @@ class TestStarship:
         })
         assert float(ship.fuel_mass() / kg) == pytest.approx(400.0)
 
+    def test_sail_zero_initial_distance_raises(self):
+        """Test that sailing with position at star center raises ValueError"""
+        sail = SolarSail(1.0 * kg, 100.0 * m)
+        self.starship.solar_sail = sail
+        self.starship.position = 0.0 * m
+        with pytest.raises(ValueError, match="singularity at star center"):
+            self.starship.sail(position_of_star=0.0 * m)
 
+    def test_sail_invalid_max_sail_time_raises(self):
+        """Test that non-positive max_sail_time raises ValueError"""
+        sail = SolarSail(1.0 * kg, 100.0 * m)
+        self.starship.solar_sail = sail
+        self.starship.position = 1.0 * astronomical_unit
+        with pytest.raises(ValueError, match="max_sail_time must be positive"):
+            self.starship.sail(position_of_star=0.0 * m, max_sail_time=0.0 * s)
 
+    def test_sail_solver_failure_raises(self, monkeypatch):
+        """Test that solve_ivp failure raises NumericalIntegrationError"""
+        sail = SolarSail(1.0 * kg, 100.0 * m)
+        self.starship.solar_sail = sail
+        self.starship.position = 1.0 * astronomical_unit
 
+        class FailedResult:  # pylint: disable=too-few-public-methods
+            """Simulate solver failure"""
+            success = False
+            status = -1
+            message = "Step size became too small."
+
+        import scipy.integrate  # pylint: disable=import-outside-toplevel
+        monkeypatch.setattr(scipy.integrate, "solve_ivp", lambda *args, **kwargs: FailedResult())
+        with pytest.raises(NumericalIntegrationError,
+                           match="Numerical integration for solar sailing failed"):
+            self.starship.sail(position_of_star=0.0 * m)
+
+    def test_sail_solver_non_finite_solution_raises(self, monkeypatch):
+        """Test that solve_ivp returning NaN/Inf raises NumericalIntegrationError"""
+        sail = SolarSail(1.0 * kg, 100.0 * m)
+        self.starship.solar_sail = sail
+        self.starship.position = 1.0 * astronomical_unit
+
+        class NanResult:  # pylint: disable=too-few-public-methods
+            """Simulate NaN solution output"""
+            success = True
+            status = 0
+            message = "Success"
+            t = np.array([0.0, 10.0])
+            y = np.array([[np.nan, 1.0], [0.0, 0.0]])
+
+        import scipy.integrate  # pylint: disable=import-outside-toplevel
+        monkeypatch.setattr(scipy.integrate, "solve_ivp", lambda *args, **kwargs: NanResult())
+        with pytest.raises(NumericalIntegrationError, match="non-finite values"):
+            self.starship.sail(position_of_star=0.0 * m)
+
+    def test_sail_configurable_solver_settings(self):
+        """Test configuring rtol, atol, method, and max_step in sail"""
+        sail = SolarSail(1.0 * kg, 100.0 * m)
+        self.starship.solar_sail = sail
+        self.starship.position = 1.0 * astronomical_unit
+        self.starship.sail(
+            position_of_star=0.0 * m,
+            max_sail_time=3600.0 * s,
+            rtol=1e-8,
+            atol=1e-10,
+            method='Radau',
+            max_step=100.0
+        )
+        assert self.starship.time / s > 0
+
+    def test_swim_invalid_time_and_failure(self, monkeypatch):
+        """Test swim validation and error handling"""
+        swimmer = Swimmer(1.0e19 * m ** 2)
+        self.starship.swimmer = swimmer
+        with pytest.raises(ValueError, match="swim_time must be positive"):
+            self.starship.swim(1.0e10 * watt, -10.0 * s)
+
+        class FailedResult:  # pylint: disable=too-few-public-methods
+            """Simulate solver failure"""
+            success = False
+            status = -1
+            message = "Integration step failed."
+
+        import scipy.integrate  # pylint: disable=import-outside-toplevel
+        monkeypatch.setattr(scipy.integrate, "solve_ivp", lambda *args, **kwargs: FailedResult())
+        with pytest.raises(NumericalIntegrationError,
+                           match="Numerical integration for SWIMMER failed"):
+            self.starship.swim(1.0e10 * watt, 10.0 * s)
 

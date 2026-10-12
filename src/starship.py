@@ -1,6 +1,6 @@
 """Starship class"""
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any, Union, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.integrate
@@ -20,6 +20,10 @@ from src.constants import c, g, solar_mass, mass_3He, mass_2H
 from src.solar_sail import SolarSail
 from src.swimmer import Swimmer
 from src.utils import v_escape
+
+
+class NumericalIntegrationError(RuntimeError):
+    """Exception raised when numerical integration fails to solve or converge."""
 
 
 class Starship:
@@ -334,12 +338,39 @@ class Starship:
                         max_accel: Optional[unit],
                         star_mass: unit,
                         stellar_luminosity: unit,
-                        include_gravity: bool):
-        """Solve ODE trajectory for solar sailing."""
+                        include_gravity: bool,
+                        rtol: float = 1e-6,
+                        atol: Union[float, Sequence[float]] = 1e-9,
+                        method: str = 'RK45',
+                        max_step: float = np.inf,
+                        solver_options: Optional[Dict[str, Any]] = None):
+        """Solve ODE trajectory for solar sailing with robust error handling."""
+        max_sail_time_s = max_sail_time / s
+        if max_sail_time_s <= 0:
+            raise ValueError(f"max_sail_time must be positive, got {max_sail_time_s} s.")
+
+        rel_pos_m = relative_position_to_star / m
+        if not np.isfinite(rel_pos_m):
+            raise ValueError("relative_position_to_star must be a finite value.")
+        if rel_pos_m == 0:
+            raise ValueError(
+                "Initial relative_position_to_star cannot be zero (singularity at star center)."
+            )
+
+        init_v_ms = self.velocity / (m / s)
+        if not np.isfinite(init_v_ms):
+            raise ValueError("Initial velocity must be a finite value.")
+
         def integrand(_, pos_vel):
+            if not np.all(np.isfinite(pos_vel)):
+                raise FloatingPointError(
+                    f"Non-finite state encountered in sailing integrand: {pos_vel}"
+                )
             pos, vel = pos_vel[0], pos_vel[1]
-            if np.isnan(pos) or np.isnan(vel):
-                raise ValueError("Nan values in integrand.")
+            if abs(pos) == 0:
+                raise FloatingPointError(
+                    "Sailing trajectory reached singularity: position relative to star is 0 m."
+                )
             accel = self.solar_sail.acceleration(
                 pos * m,
                 self.total_mass(),
@@ -348,18 +379,49 @@ class Starship:
                 stellar_luminosity=stellar_luminosity,
                 include_gravity=include_gravity
             ) / (m / s ** 2)
-            derivative = np.array([
-                vel,
-                accel
-            ])
+            if not np.isfinite(accel):
+                raise FloatingPointError(
+                    f"Non-finite acceleration computed in sailing integrand: {accel}"
+                )
+            derivative = np.array([vel, accel], dtype=float)
+            if not np.all(np.isfinite(derivative)):
+                raise FloatingPointError("Non-finite derivative computed in sailing integrand.")
             return derivative
 
-        initial_velocity = self.velocity
-        return scipy.integrate.solve_ivp(
-            integrand,
-            [0, max_sail_time / s],
-            [relative_position_to_star / m, initial_velocity / (m / s)]
-        )
+        extra_options = dict(solver_options or {})
+        try:
+            y_soln = scipy.integrate.solve_ivp(
+                integrand,
+                [0, max_sail_time_s],
+                [rel_pos_m, init_v_ms],
+                rtol=rtol,
+                atol=atol,
+                method=method,
+                max_step=max_step,
+                **extra_options
+            )
+        except FloatingPointError as err:
+            raise NumericalIntegrationError(
+                f"Numerical integration failed due to floating point error in integrand: {err}"
+            ) from err
+
+        if not y_soln.success or y_soln.status < 0:
+            raise NumericalIntegrationError(
+                f"Numerical integration for solar sailing failed: {y_soln.message} "
+                f"(status={y_soln.status}, method={method})"
+            )
+
+        if not np.all(np.isfinite(y_soln.y)):
+            raise NumericalIntegrationError(
+                "Numerical integration for solar sailing produced non-finite values in solution."
+            )
+
+        if len(y_soln.t) < 2:
+            raise NumericalIntegrationError(
+                "Numerical integration for solar sailing did not produce enough time steps."
+            )
+
+        return y_soln
 
     def _apply_sailing_trajectory(self,
                                   y_soln,
@@ -372,12 +434,14 @@ class Starship:
         """Step through the sailing trajectory solution and update ship state."""
         sailing_time = 0.0 * s
         for i in range(1, len(y_soln.t)):
-            delta_t = (y_soln.t[i] - y_soln.t[i - 1]) * s
+            step_dt = y_soln.t[i] - y_soln.t[i - 1]
+            if step_dt <= 0:
+                continue
+            delta_t = step_dt * s
             self.time += delta_t
             self.position = initial_position + y_soln.y[0, i] * m - relative_position_to_star
             self.velocity = y_soln.y[1, i] * (m / s)
-            acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / (
-                y_soln.t[i] - y_soln.t[i - 1]) * (m / s ** 2)
+            acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / step_dt * (m / s ** 2)
             self.log_entry(
                 f"year {(self.time) / yr:0.1f} - Sailing with velocity "
                 f"{self.velocity / (m / s)} m/s with acceleration "
@@ -415,8 +479,44 @@ class Starship:
              generate_electricity: bool = True,
              include_gravity: bool = False,
              star_mass: Optional[unit] = None,
-             stellar_luminosity: Optional[unit] = None):
-        """Accelerate or decelerate using solar sails."""
+             stellar_luminosity: Optional[unit] = None,
+             rtol: float = 1e-6,
+             atol: Union[float, Sequence[float]] = 1e-9,
+             method: str = 'RK45',
+             max_step: float = np.inf,
+             solver_options: Optional[Dict[str, Any]] = None):
+        """Accelerate or decelerate using solar sails.
+
+        Args:
+            target_velocity: Optional[unit]
+                Target velocity. If None, accelerates to 90% of max velocity or
+                decelerates to 0 m/s depending on orientation.
+            position_of_star: unit
+                Position of the star. Defaults to 0.0 * m.
+            max_accel: Optional[unit]
+                Maximum acceleration limit for the sail.
+            max_sail_time: unit
+                Maximum duration for solar sailing integration.
+            generate_electricity: bool
+                Whether ship systems generate electricity during flight.
+            include_gravity: bool
+                Whether to incorporate stellar gravitational pull.
+            star_mass: Optional[unit]
+                Mass of the star. Defaults to source/destination star mass.
+            stellar_luminosity: Optional[unit]
+                Luminosity of the star. Defaults to source/destination stellar luminosity.
+            rtol: float
+                Relative tolerance for numerical integration. Defaults to 1e-6.
+            atol: Union[float, Sequence[float]]
+                Absolute tolerance for numerical integration. Defaults to 1e-9.
+            method: str
+                Integration method for solve_ivp (e.g. 'RK45', 'Radau', 'BDF', 'DOP853').
+                Defaults to 'RK45'.
+            max_step: float
+                Maximum allowed step size in seconds for solve_ivp. Defaults to np.inf.
+            solver_options: Optional[Dict[str, Any]]
+                Additional keyword options passed directly to scipy.integrate.solve_ivp.
+        """
         if self.solar_sail is None:
             raise RuntimeError("This starship has no solar sail. Cannot sail.")
 
@@ -424,6 +524,11 @@ class Starship:
             position_of_star, star_mass, stellar_luminosity)
 
         relative_position_to_star = self.position - position_of_star
+        if relative_position_to_star / m == 0:
+            raise ValueError(
+                "Initial position cannot coincide with star position (singularity at star center)."
+            )
+
         max_velocity = self.solar_sail.final_velocity(
             self.total_mass() - self.solar_sail.sail_mass,
             relative_position_to_star,
@@ -448,7 +553,12 @@ class Starship:
             max_accel=max_accel,
             star_mass=resolved_star_mass,
             stellar_luminosity=luminosity,
-            include_gravity=include_gravity
+            include_gravity=include_gravity,
+            rtol=rtol,
+            atol=atol,
+            method=method,
+            max_step=max_step,
+            solver_options=solver_options
         )
 
         self._apply_sailing_trajectory(
@@ -464,15 +574,51 @@ class Starship:
              power_delivered: unit,
              swim_time: unit,
              direction: int = 1,
-             generate_electricity: bool = True):
-        """Accelerate or decelerate using solar sails."""
+             generate_electricity: bool = True,
+             *,
+             rtol: float = 1e-6,
+             atol: Union[float, Sequence[float]] = 1e-9,
+             method: str = 'RK45',
+             max_step: float = np.inf,
+             solver_options: Optional[Dict[str, Any]] = None):
+        """Accelerate or decelerate using the SWIMMER engine.
+
+        Args:
+            power_delivered: unit
+                Power delivered to the SWIMMER pusher.
+            swim_time: unit
+                Duration of the swimming phase.
+            direction: int
+                Direction of thrust (+1 or -1).
+            generate_electricity: bool
+                Whether to generate electricity during flight.
+            rtol: float
+                Relative tolerance for numerical integration. Defaults to 1e-6.
+            atol: Union[float, Sequence[float]]
+                Absolute tolerance for numerical integration. Defaults to 1e-9.
+            method: str
+                Integration method for solve_ivp. Defaults to 'RK45'.
+            max_step: float
+                Maximum allowed step size in seconds. Defaults to np.inf.
+            solver_options: Optional[Dict[str, Any]]
+                Additional keyword options passed directly to scipy.integrate.solve_ivp.
+        """
         if self.swimmer is None:
             raise RuntimeError("This starship has no SWIMMER engine. Cannot swim.")
 
+        swim_time_s = swim_time / s
+        if swim_time_s <= 0:
+            raise ValueError(f"swim_time must be positive, got {swim_time_s} s.")
+
+        init_pos_m = self.position / m
+        init_vel_ms = self.velocity / (m / s)
+        if not np.isfinite(init_pos_m) or not np.isfinite(init_vel_ms):
+            raise ValueError("Initial position and velocity must be finite values.")
+
         def integrand(_, pos_vel):
-            pos, vel = pos_vel[0], pos_vel[1]
-            if np.isnan(pos) or np.isnan(vel):
-                raise ValueError("Nan values in SWIMMER integrand.")
+            if not np.all(np.isfinite(pos_vel)):
+                raise FloatingPointError("Non-finite state encountered in SWIMMER integrand.")
+            vel = pos_vel[1]
             braking = np.sign(vel) != direction
             accel = self.swimmer.acceleration(
                 power_delivered,
@@ -480,31 +626,64 @@ class Starship:
                 self.total_mass(),
                 braking=braking
             ) / (m / s ** 2)
+            if not np.isfinite(accel):
+                raise FloatingPointError(
+                    f"Non-finite acceleration computed in SWIMMER integrand: {accel}"
+                )
             accel *= direction
-            derivative = np.array([
-                vel,
-                accel
-            ])
+            derivative = np.array([vel, accel], dtype=float)
+            if not np.all(np.isfinite(derivative)):
+                raise FloatingPointError("Non-finite derivative computed in SWIMMER integrand.")
             return derivative
 
-        y_soln = scipy.integrate.solve_ivp(
-            integrand,
-            [0, swim_time / s],
-            [self.position / m, self.velocity / (m / s)]
-        )
+        extra_options = dict(solver_options or {})
+        try:
+            y_soln = scipy.integrate.solve_ivp(
+                integrand,
+                [0, swim_time_s],
+                [init_pos_m, init_vel_ms],
+                rtol=rtol,
+                atol=atol,
+                method=method,
+                max_step=max_step,
+                **extra_options
+            )
+        except FloatingPointError as err:
+            raise NumericalIntegrationError(
+                f"Numerical integration failed due to floating point error in integrand: {err}"
+            ) from err
+
+        if not y_soln.success or y_soln.status < 0:
+            raise NumericalIntegrationError(
+                f"Numerical integration for SWIMMER failed: {y_soln.message} "
+                f"(status={y_soln.status}, method={method})"
+            )
+
+        if not np.all(np.isfinite(y_soln.y)):
+            raise NumericalIntegrationError(
+                "Numerical integration for SWIMMER produced non-finite values in solution."
+            )
+
+        if len(y_soln.t) < 2:
+            raise NumericalIntegrationError(
+                "Numerical integration for SWIMMER did not produce enough time steps."
+            )
+
         for i in range(1, len(y_soln.t)):
-            delta_t = (y_soln.t[i] - y_soln.t[i - 1]) * s
+            step_dt = y_soln.t[i] - y_soln.t[i - 1]
+            if step_dt <= 0:
+                continue
+            delta_t = step_dt * s
             self.time += delta_t
             self.position = y_soln.y[0, i] * m
             self.velocity = y_soln.y[1, i] * (m / s)
-            acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / (
-                y_soln.t[i] - y_soln.t[i - 1]) * (m / s ** 2)
+            acceleration = (y_soln.y[1, i] - y_soln.y[1, i - 1]) / step_dt * (m / s ** 2)
             self.log_entry(
                 f"year {(self.time) / yr:0.1f} - Swimming with velocity "
                 f"{self.velocity / (m / s)} m/s with acceleration "
                 f"{acceleration / g}g."
             )
-            swim_time = y_soln.t[i] * s
+            swim_time_val = y_soln.t[i] * s
             if generate_electricity:
                 self.generate_electricity(self.electrical_power * delta_t)
 
@@ -512,7 +691,7 @@ class Starship:
             f"year {(self.time) / yr:0.1f} - Finished swimming. velocity "
             f"{self.velocity / (m / s)} m/s. "
             f"Swimming time was "
-            f"{swim_time / (24 * 3600 * s)} days."
+            f"{swim_time_val / (24 * 3600 * s)} days."
         )
 
     def print_history(self):
