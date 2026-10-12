@@ -8,3 +8,45 @@ The following shows an example mission from the solar system to Proxima Centauri
 ![Plots for example mission](images/proxima_centauri.png)
 
 Currently, we assume that fuel escaping the suns gravity is negligible and that the mission is non-relativistic.
+
+## Development Setup
+
+This project uses [`uv`](https://docs.astral.sh/uv/) for Python environment and package management.
+
+### Installation
+
+If `uv` is not already installed on your system, install it via:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Environment Setup
+
+To create the virtual environment and install all dependencies (as locked in `uv.lock`):
+
+```bash
+uv sync
+```
+
+`uv` will automatically download and use the required Python version (Python 3.9) specified in `.python-version`.
+
+### Running Tests and Linters
+
+Run the test suite:
+```bash
+uv run pytest
+```
+
+Run linters:
+```bash
+uv run pylint src tests
+uv run flake8 --count --statistics
+```
+
+### Jupyter Notebooks
+
+To run the interactive notebooks:
+```bash
+uv run jupyter lab
+```
