@@ -3,25 +3,20 @@ name: Python linting
 on: [push]
 
 jobs:
-  build:
+  lint:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Set up Miniconda
-      uses: conda-incubator/setup-miniconda@v2
+    - uses: actions/checkout@v4
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v5
       with:
-        activate-environment: interstellar
-        environment-file: environment.yml
-        python-version: 3.9
-        auto-activate-base: false
+        enable-cache: true
+    - name: Set up Python
+      run: uv python install
+    - name: Install dependencies
+      run: uv sync
     - name: Lint with pylint
-      shell: bash -l {0}
-      run: |
-        export PYTHONPATH=$(pwd)
-        pylint src tests
+      run: uv run pylint src tests
     - name: Lint with flake8
-      shell: bash -l {0}
-      run: |
-        export PYTHONPATH=$(pwd)
-        flake8 --count --statistics
+      run: uv run flake8 --count --statistics
