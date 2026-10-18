@@ -94,46 +94,46 @@ The updated plans were implemented in [`notebooks/Inertia_Ship.ipynb`](file:///h
 ### 5.1 Nominal Generation Ship Mission (Cell 4 & 5)
 * **Phase 1: Solar Sail Launch**:
   * Unfurls at $0.01\text{ AU}$, maximum acceleration $3.0\ g$.
-  * Reaches $v = 451.2\text{ km/s}$ ($1.50 \times 10^{-3}\ c$) in ~5 days at distance $1.28\text{ AU}$.
+  * Reaches $v = 449.5\text{ km/s}$ ($1.50 \times 10^{-3}\ c$) in 2.4 days.
 * **Phase 2: ~50-Year Fusion Engine Acceleration**:
-  * Target velocity: $v_{\text{target}} = v_{\text{sail}} + a_{\text{fusion}} \times (50\text{ yr}) = 559.5\text{ km/s}$ ($1.87 \times 10^{-3}\ c$).
+  * Target velocity: $v_{\text{target}} = v_{\text{sail}} + a_{\text{fusion}} \times (50\text{ yr}) = 557.8\text{ km/s}$ ($1.86 \times 10^{-3}\ c$).
   * Duration: $50.7\text{ years}$.
   * Consumes $40.6\%$ of fuel, leaving **$3.92 \times 10^{10}\text{ kg}$ ($59.4\%$)** in reserve.
 * **Phase 3: Interstellar Cruise**:
-  * Cruises $4.16\text{ ly}$ across interstellar space over $2,228\text{ years}$.
+  * Cruises $4.16\text{ ly}$ across interstellar space over $2,235\text{ years}$.
   * Onboard electricity generation ($1.5 \times 10^{11}\text{ W}$) consumes only ~0.1% of remaining fuel.
 * **Phase 4: Fusion Deceleration**:
-  * Decelerates from $559.5\text{ km/s}$ to sail capture velocity $402.2\text{ km/s}$ at destination.
-  * Consumes $2.97 \times 10^{10}\text{ kg}$ of fuel, leaving **$9.48 \times 10^{9}\text{ kg}$** of fuel safely in reserve.
+  * Decelerates from $557.8\text{ km/s}$ to sail capture velocity $402.2\text{ km/s}$ at destination.
+  * Consumes $2.94 \times 10^{10}\text{ kg}$ of fuel, leaving **$9.75 \times 10^{9}\text{ kg}$** of fuel safely in reserve.
 * **Phase 5: Solar Sail Deceleration into Destination Orbit**:
   * Sails against destination star radiation pressure to reach $v = 0.0\text{ km/s}$ at $4.36\text{ ly}$.
-* **Total Nominal Duration**: **$2,351.9\text{ years}$**.
+* **Total Nominal Duration**: **$2,358.2\text{ years}$**.
 
-### 5.2 Naive Mission Abort (Cell 7 & 8)
+### 5.2 Naive Mission Abort (Cells 8, 9, 10)
 * Models what occurs if the crew attempts to reverse course using fusion rocket propulsion alone.
-* Burning $99\%$ of remaining fuel ($3.88 \times 10^{10}\text{ kg}$) over 101 years turns the velocity around to $-341.2\text{ km/s}$, but depletes tanks to $< 1\%$ ($3.9 \times 10^8\text{ kg}$).
+* Burning $99\%$ of remaining fuel ($3.88 \times 10^{10}\text{ kg}$) over 101 years turns the velocity around to $-339.5\text{ km/s}$, but depletes tanks to $< 1\%$ ($3.9 \times 10^8\text{ kg}$).
 * The ship has zero propellant left to brake upon reaching Earth and cannot sustain life support power.
 
-### 5.3 SWIMMER Mission Abort (Cell 10 & 11)
+### 5.3 SWIMMER Mission Abort (Cells 11, 12, 13)
 * **Configuration**:
   * Dry mass fixed: $m_{\text{payload}} = 6.6 \times 10^{10}\text{ kg}$ intact.
   * Pusher plate: radius $7.0 \times 10^5\text{ km}$, areal density $7.63 \times 10^{-9}\text{ kg/m}^2$, mass $1.17 \times 10^{10}\text{ kg}$.
   * Total ship mass: $1.21 \times 10^{11}\text{ kg}$.
   * Operating power: $P = 7.0 \times 10^{13}\text{ W}$ ($70\text{ TW}$).
 * **Flight Profile**:
-  1. **Abort Initiation**: At Year $50.7$, distance $0.0855\text{ ly}$ (~$5,400\text{ AU}$), velocity $+559.5\text{ km/s}$.
+  1. **Abort Initiation**: At Year $50.7$, distance $0.0852\text{ ly}$ (~$5,388\text{ AU}$), velocity $+557.8\text{ km/s}$.
   2. **SWIMMER Deceleration (Braking Mode, `direction = -1`)**:
      * Duration: $29.23\text{ years}$.
-     * Halts outbound motion, reaching aphelion turnaround at **Year $80.0$** at distance **$0.1034\text{ ly}$** (~$6,536\text{ AU}$) with $v = -0.2\text{ km/s}$.
+     * Halts outbound motion, reaching aphelion turnaround at **Year $80.0$** at distance **$0.1030\text{ ly}$** (~$6,515\text{ AU}$) with $v = -0.54\text{ km/s}$.
   3. **SWIMMER Inbound Acceleration (`direction = -1`)**:
-     * Duration: $56.084\text{ years}$.
-     * Accelerates toward Earth, reaching peak return speed of **$-896.5\text{ km/s}$** ($-3.0 \times 10^{-3}\ c$) at **Year $136.1$** at distance $0.0296\text{ ly}$.
+     * Duration: $55.933\text{ years}$.
+     * Accelerates toward Earth, reaching peak return speed of **$-894.6\text{ km/s}$** ($-3.0 \times 10^{-3}\ c$) at **Year $135.9$** at distance $0.0293\text{ ly}$.
   4. **SWIMMER Deceleration into Earth Orbit (`direction = +1`)**:
      * Duration: $34.20\text{ years}$.
      * Brakes against plasma, bringing the ship to rest relative to the Sun.
-     * **Arrival Time**: **Year $170.3$** (within ~170 years of launch).
-     * **Arrival Position**: **$1.15\text{ AU}$** (Earth-like orbit around the Sun).
-     * **Final Velocity**: **$0.00\text{ km/s}$** radial velocity.
+     * **Arrival Time**: **Year $170.1$** (within ~170 years of launch).
+     * **Arrival Position**: **$1.03\text{ AU}$** (Earth-like orbit around the Sun).
+     * **Final Velocity**: **$0.15\text{ km/s}$** radial velocity.
      * **Fuel Remaining**: **$3.92 \times 10^{10}\text{ kg}$** ($59.4\%$ of initial fuel) completely intact for station keeping and habitat power.
 
 ---
@@ -142,11 +142,11 @@ The updated plans were implemented in [`notebooks/Inertia_Ship.ipynb`](file:///h
 
 | Check | Result | Command |
 |---|---|---|
-| Unit Test Suite | 79 / 79 Passing | `PYTHONPATH=. uv run pytest` |
-| Notebook Imports | Verified | `from scimath.units...` works via Python 3.11 |
+| Unit Test Suite | 85 / 85 Passing | `uv run pytest` |
+| Notebook Imports | Verified | `from scimath.units...` works via Python 3.9 |
 | Notebook Execution | All 15 cells executed cleanly | `uv run jupyter nbconvert --to notebook --execute --inplace notebooks/Inertia_Ship.ipynb` |
-| Nominal Mission Fuel | Passed (> 9.4B kg margin) | Cell 6 in notebook |
-| SWIMMER Abort Arrival | Year 170.3 at 1.15 AU, v=0 | Cell 12 in notebook |
+| Nominal Mission Fuel | Passed (> 9.7B kg margin) | Cell 6 in notebook |
+| SWIMMER Abort Arrival | Year 170.1 at 1.03 AU, v=0.15 km/s | Cell 12 in notebook |
 
 ---
 
@@ -164,6 +164,5 @@ The notebook [`notebooks/Inertia_Ship.ipynb`](file:///home/mazur/linstore/repos/
 3. **Architecture & Parameters (Cells 3 & 4)**: Fixed dry mass justification ($6.6\times 10^{10}\text{ kg}$), 1:1 fuel ratio, and carbon nanotube sail geometry ($R = 6,371\text{ km}$).
 4. **Mission Scenario 1 — Nominal Voyage (Cells 5, 6, 7)**: Step-by-step breakdown of the 5 flight phases with full trajectory logs and Matplotlib visualization.
 5. **Mission Scenario 2 — The Naive Abort Dilemma (Cells 8, 9, 10)**: Demonstrates the Tsiolkovsky tyranny when attempting to reverse course on reaction mass alone.
-6. **Mission Scenario 3 — The SWIMMER Resolution (Cells 11, 12, 13)**: The propellantless return journey, detailing turnaround at $0.1034\text{ ly}$, inbound sprint to $-896.5\text{ km/s}$, and smooth orbital capture at $1.15\text{ AU}$ at Year 170.3.
+6. **Mission Scenario 3 — The SWIMMER Resolution (Cells 11, 12, 13)**: The propellantless return journey, detailing turnaround at $0.1030\text{ ly}$, inbound sprint to $-894.6\text{ km/s}$, and smooth orbital capture at $1.03\text{ AU}$ at Year 170.1.
 7. **Comparative Analysis & Summary (Cell 14)**: A synthesis table contrasting all three scenarios on propulsion, max distance, speed, flight time, destination, and fuel margins.
-
