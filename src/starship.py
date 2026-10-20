@@ -125,27 +125,14 @@ class Starship:
                            engine_name: str,
                            target_velocity: unit,
                            *,
-                           fuel_mass: Optional[unit],
-                           direction: int,
                            include_gravity: bool,
                            departure_distance: Optional[unit]) -> unit:
-        """Execute engine burn for acceleration phase."""
+        """Execute engine burn for acceleration to a target velocity."""
         v_curr_ms = self.velocity / (m / s)
         target_v_ms = target_velocity / (m / s)
         v_esc = self.source_escape_velocity(departure_distance)
         v_esc_ms = v_esc / (m / s)
         ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
-
-        if fuel_mass is not None:
-            delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
-            delta_v_burn_ms = delta_v_burn / (m / s)
-            v_gross_ms = abs(v_curr_ms) + delta_v_burn_ms
-            if include_gravity and v_gross_ms >= v_esc_ms:
-                v_net_ms = np.sqrt(v_gross_ms ** 2 - v_esc_ms ** 2)
-                self.velocity = direction * v_net_ms * (m / s)
-            else:
-                self.velocity += direction * delta_v_burn
-            return delta_v_burn
 
         v_target_mag = abs(target_v_ms)
         v_curr_mag = abs(v_curr_ms)
@@ -163,28 +150,14 @@ class Starship:
                            engine_name: str,
                            target_velocity: unit,
                            *,
-                           fuel_mass: Optional[unit],
-                           direction: int,
                            include_gravity: bool,
                            destination_distance_from_star: Optional[unit]) -> unit:
-        """Execute engine burn for deceleration phase."""
+        """Execute engine burn for deceleration to a target velocity."""
         v_curr_ms = self.velocity / (m / s)
         target_v_ms = target_velocity / (m / s)
         v_esc = self.destination_escape_velocity(destination_distance_from_star)
         v_esc_ms = v_esc / (m / s)
         ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
-
-        if fuel_mass is not None:
-            delta_v_burn = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
-            delta_v_burn_ms = delta_v_burn / (m / s)
-            if include_gravity:
-                v_inbound_ms = np.sqrt(v_curr_ms ** 2 + v_esc_ms ** 2)
-                v_rem_ms = max(0.0, v_inbound_ms - delta_v_burn_ms)
-                self.velocity = direction * v_rem_ms * (m / s)
-            else:
-                v_rem_ms = max(0.0, abs(v_curr_ms) - delta_v_burn_ms)
-                self.velocity = direction * v_rem_ms * (m / s)
-            return delta_v_burn
 
         v_target_mag = abs(target_v_ms)
         v_curr_mag = abs(v_curr_ms)
@@ -228,7 +201,9 @@ class Starship:
             generate_electricity: bool
                 Whether to generate electricity during maneuver
             include_gravity: bool
-                Whether to include gravitational escape velocity corrections
+                Whether target-velocity burns include gravitational escape
+                velocity corrections. Ignored for fuel-mass burns, which apply
+                rocket Δv along `direction`.
             departure_distance: unit (distance)
                 Distance from source star for escape velocity calculation
             destination_distance_from_star: unit (distance)
@@ -243,24 +218,24 @@ class Starship:
 
         initial_v_ms = v_curr_ms
         if fuel_mass is not None:
-            is_decelerating = bool(v_curr_ms != 0 and np.sign(v_curr_ms) != np.sign(direction))
+            # Fuel-limited burns apply rocket Δv along `direction`. Do not treat
+            # leftover speed as already pointing in the thrust direction, and do
+            # not fold stellar escape speed into a mid-course velocity jump.
+            ship_dry_mass = self.total_mass() - self.engines[engine_name].fuel_mass
+            delta_v = self.engines[engine_name].burn_fuel(fuel_mass, ship_dry_mass)
+            self.velocity += direction * delta_v
         else:
             is_decelerating = abs(target_v_ms) < abs(v_curr_ms)
-
-        if not is_decelerating:
-            delta_v = self._burn_acceleration(
-                engine_name, target_velocity,
-                fuel_mass=fuel_mass,
-                direction=direction,
-                include_gravity=include_gravity,
-                departure_distance=departure_distance)
-        else:
-            delta_v = self._burn_deceleration(
-                engine_name, target_velocity,
-                fuel_mass=fuel_mass,
-                direction=direction,
-                include_gravity=include_gravity,
-                destination_distance_from_star=destination_distance_from_star)
+            if not is_decelerating:
+                delta_v = self._burn_acceleration(
+                    engine_name, target_velocity,
+                    include_gravity=include_gravity,
+                    departure_distance=departure_distance)
+            else:
+                delta_v = self._burn_deceleration(
+                    engine_name, target_velocity,
+                    include_gravity=include_gravity,
+                    destination_distance_from_star=destination_distance_from_star)
 
         final_v_ms = self.velocity / (m / s)
         accel_ms2 = acceleration / (m / s ** 2)
