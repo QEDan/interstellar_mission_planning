@@ -11,7 +11,7 @@ from scimath.units.time import seconds as s, years
 
 
 from src import SolarSail, Engine, Starship, Swimmer, NumericalIntegrationError
-from src.constants import c, year, solar_mass
+from src.constants import c, g, year, solar_mass
 
 
 class TestStarship:
@@ -157,6 +157,38 @@ class TestStarship:
         assert abs(self.starship.fuel_mass() -
                    (1 - fuel_fraction) * self.fuel_mass) / self.fuel_mass < 0.01
         assert self.starship.time / s > 0
+
+    @pytest.mark.parametrize('include_gravity', [True, False])
+    def test_fuel_mass_retrograde_burn_applies_delta_v_vectorially(self, include_gravity):
+        """A fuel-limited reverse burn subtracts rocket Δv; leftover speed is not sign-flipped."""
+        initial_velocity = 500.0 * km / s
+        acceleration = 1.0e-4 * g
+        fuel_to_burn = 0.2 * self.fuel_mass
+        self.starship.velocity = initial_velocity
+
+        dry_mass = self.starship.total_mass() - self.starship.engines['main'].fuel_mass
+        expected_engine = Engine(
+            self.fuel_mass,
+            exhaust_velocity=self.starship.engines['main'].exhaust_velocity)
+        expected_delta_v = expected_engine.burn_fuel(fuel_to_burn, dry_mass)
+
+        t0 = self.starship.time
+        velocity = self.starship.accelerate(
+            fuel_mass=fuel_to_burn,
+            direction=-1,
+            acceleration=acceleration,
+            generate_electricity=False,
+            include_gravity=include_gravity)
+
+        expected_velocity = initial_velocity - expected_delta_v
+        assert abs((velocity - expected_velocity) / (m / s)) < 1.0e-6
+        assert velocity / (m / s) > 0.0
+        dt = self.starship.time - t0
+        assert abs((dt - expected_delta_v / acceleration) / s) < 1.0e-6
+        apparent_accel = abs((velocity - initial_velocity) / dt)
+        assert abs((apparent_accel - acceleration) / (m / s ** 2)) < 1.0e-9
+        remaining_fraction = self.starship.fuel_mass() / self.fuel_mass
+        assert abs(remaining_fraction - 0.8) < 1.0e-9
 
     @pytest.mark.parametrize('target_delta_velocity',
                              [0.001 * c,
